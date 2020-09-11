@@ -18,7 +18,7 @@ class Logger(logging.Handler):
   def format(self, record):
     if type(record.msg) is tuple:
       record.msg = " ".join([str(s) for s in record.msg])
-    msg = [record.msg] + [str(s) for s in record.args]
+    msg = [str(record.msg)] + [str(s) for s in record.args]
     record.msg = " ".join(msg)
     return f"[{record.levelname.lower()}] {record.msg}"
 

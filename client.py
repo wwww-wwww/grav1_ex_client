@@ -1,16 +1,21 @@
 import json, logging, os
 import logger as log
 
-from phxsocket import Socket
-from auth import auth_key, auth_pass, TimeoutException
+from urllib.parse import urljoin
 
 from threading import Condition, Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
+from phxsocket import Socket
+from auth import auth_key, auth_pass, TimeoutException
+from worker import Worker, Job
+
 class Client:
   def __init__(self, args):
     self.target = args.target
+    self.ssl = False
+
     self.key = args.key
     self.name = args.name
 
@@ -41,7 +46,9 @@ class Client:
       self.connect()
       return
 
-    if ssl: logging.log(log.Levels.NET, "using ssl")
+    if ssl:
+      self.ssl = True
+      logging.log(log.Levels.NET, "using ssl")
 
     logging.log(log.Levels.NET, "connecting to websocket")
 
@@ -64,7 +71,7 @@ class Client:
     self.connect()
 
   def on_error(self, socket, message):
-    print(message)
+    logging.log(log.Levels.NET, message)
 
   def on_open(self, socket):
     logging.log(log.Levels.NET, "websocket opened")
@@ -92,6 +99,7 @@ class Client:
       params["id"] = self.socket_id
 
     self.channel = socket.channel("worker", params)
+    self.channel.on("push_job", self.on_job)
     self.socket_id = self.channel.join()
 
     logging.log(log.Levels.NET, "connected to channel")
@@ -99,11 +107,20 @@ class Client:
   def on_close(self, socket):
     self.reconnect()
 
+  def on_job(self, payload):
+    logging.log(log.Levels.NET, payload)
+    self.channel.push("recv_job", {"downloading": payload["segment_id"]})
+    self.download(payload["url"], Job(payload))
+
   def get_job_queue(self):
     return [job.segment for job in self.job_queue]
 
   def get_upload_queue(self):
     return [job.args[0].segment for job in list(self.upload_queue.work_queue.queue)]
+
+  def download(self, url, job):
+    url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
+    logging.log(log.Levels.NET, "downloading", url)
 
 if __name__ == "__main__":
   logger = log.Logger()
