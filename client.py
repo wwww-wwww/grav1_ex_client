@@ -3,36 +3,34 @@ import logger as log
 
 from urllib.parse import urljoin
 
-from threading import Condition, Event, Lock
+from threading import Event
 from collections import deque
 from executor import ThreadPoolExecutor
 
 from phxsocket import Socket
 from auth import auth_key, auth_pass, TimeoutException
 from worker import Worker, Job
+from agents import JobQueue, SegmentStore
 
 class Client:
-  def __init__(self, args):
-    self.target = args.target
+  def __init__(self, target, key, name, workers, queue_size):
+    self.target = target
     self.ssl = False
 
-    self.key = args.key
-    self.name = args.name
+    self.key = key
+    self.name = name
 
     self.upload_queue = ThreadPoolExecutor(1)
     
-    self.job_queue_size = int(args.queue)
-    self.job_queue = deque()
-    self.job_queue_lock = Lock()
-    self.job_queue_not_empty = Condition(self.job_queue_lock)
-    self.job_queue_ret_lock = Lock()
+    self.job_queue = JobQueue(self, queue_size)
+    self.segment_store = SegmentStore(self)
     
     self.downloading = None
 
     self.socket = None
     self.socket_id = None
 
-    self.max_workers = args.workers
+    self.max_workers = workers
     self.workers = []
 
     self.exit_event = Event()
@@ -88,7 +86,7 @@ class Client:
         "upload_queue": self.get_upload_queue(),
         "downloading": self.downloading,
         "uploading": uploading,
-        "queue_size": self.job_queue_size
+        "queue_size": self.job_queue.queue_size
       }
     }
 
@@ -99,7 +97,7 @@ class Client:
       params["id"] = self.socket_id
 
     self.channel = socket.channel("worker", params)
-    self.channel.on("push_job", self.on_job)
+    self.channel.on("push_segment", self.on_job)
     self.socket_id = self.channel.join()
 
     logging.log(log.Levels.NET, "connected to channel")
@@ -109,31 +107,31 @@ class Client:
 
   def on_job(self, payload):
     logging.log(log.Levels.NET, payload)
-    self.channel.push("recv_job", {"downloading": payload["segment_id"]})
+    self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
     self.download(payload["url"], Job(payload))
 
   def get_job_queue(self):
-    return [job.segment for job in self.job_queue]
+    return [job.segment for job in self.job_queue.queue]
 
   def get_upload_queue(self):
     return [job.args[0].segment for job in list(self.upload_queue.work_queue.queue)]
 
   def download(self, url, job):
     url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
-    logging.log(log.Levels.NET, "downloading", url)
+    self.downloading = job.segment
+    self.segment_store.acquire(job.filename, url, job)
 
 if __name__ == "__main__":
   logger = log.Logger()
   logger.setup()
 
-  args = type("", (), {})
-  args.target = "192.168.1.50:4000"
-  args.key = "TJdaaoLTTFCz8AOu+/Ca0SflwksArRHj"
-  args.name = None
-  args.queue = 0
-  args.workers = 3
+  target = "192.168.1.50:4000"
+  key = "TJdaaoLTTFCz8AOu+/Ca0SflwksArRHj"
+  name = None
+  workers = 3
+  queue_size = 0
 
-  client = Client(args)
+  client = Client(target, key, name, workers, queue_size)
 
   #for i in range(0, int(args.workers)):
   #  client.add_worker(Worker(client))

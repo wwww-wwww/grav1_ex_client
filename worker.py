@@ -10,6 +10,7 @@ class Job:
     self.encoder_params = params["encoder_params"]
     self.ffmpeg_params = params["ffmpeg_params"]
     self.grain_table = params["grain_table"]
+    self.filename = params["split_name"]
 
 class Worker:
   def __init__(self, client):
