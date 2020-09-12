@@ -107,8 +107,8 @@ class Client:
 
   def on_job(self, payload):
     logging.log(log.Levels.NET, payload)
-    self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
     self.download(payload["url"], Job(payload))
+    self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
 
   def get_job_queue(self):
     return [job.segment for job in self.job_queue.queue]
@@ -120,6 +120,23 @@ class Client:
     url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
     self.downloading = job.segment
     self.segment_store.acquire(job.filename, url, job)
+
+  def push_job_state(self):
+    uploading = None
+    if len(self.upload_queue.working) > 0:
+      uploading = self.upload_queue.working[0].segment
+
+    logging.info(self.get_job_queue())
+
+    params = {
+      "workers": [],
+      "job_queue": self.get_job_queue(),
+      "upload_queue": self.get_upload_queue(),
+      "downloading": self.downloading,
+      "uploading": uploading
+    }
+
+    self.channel.push("update", params)
 
 if __name__ == "__main__":
   logger = log.Logger()
