@@ -107,8 +107,8 @@ class Client:
 
   def on_job(self, payload):
     logging.log(log.Levels.NET, payload)
-    self.download(payload["url"], Job(payload))
     self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
+    self.download(payload["url"], Job(payload))
 
   def get_job_queue(self):
     return [job.segment for job in self.job_queue.queue]
@@ -125,8 +125,6 @@ class Client:
     uploading = None
     if len(self.upload_queue.working) > 0:
       uploading = self.upload_queue.working[0].segment
-
-    logging.info(self.get_job_queue())
 
     params = {
       "workers": [],

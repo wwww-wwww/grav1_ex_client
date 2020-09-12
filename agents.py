@@ -78,6 +78,10 @@ class SegmentStore:
   def acquire(self, filename, url, job):
     if filename in self.files:
       self.files[filename] += 1
+      self.client.downloading = None
+      self.client.job_queue.push(job)
+      with self.client.job_queue.queue_lock:
+        self.client.push_job_state()
     else:
       self.files[filename] = 1
       logging.log(log.Levels.NET, "downloading", url)

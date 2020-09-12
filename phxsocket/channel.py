@@ -1,4 +1,5 @@
 from enum import Enum
+import logging
 
 class ChannelEvents(Enum):
   close = "phx_close"
@@ -43,6 +44,7 @@ class Channel:
       return False, "Failed to leave?"
 
   def push(self, event, payload, cb=None, reply=False):
+    logging.info("socket", "push", event, payload)
     msg = self.socket.send_message(self.topic, event, payload, cb, reply)
     return msg
 
