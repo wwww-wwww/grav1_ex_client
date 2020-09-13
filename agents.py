@@ -82,8 +82,7 @@ class SegmentStore:
       self.files[filename] += 1
       self.downloading = None
       self.client.job_queue.push(job)
-      with self.client.job_queue.queue_lock:
-        self.client.push_job_state()
+      self.client.push_job_state()
     else:
       self.files[filename] = 1
       logging.log(log.Levels.NET, "downloading", url)
