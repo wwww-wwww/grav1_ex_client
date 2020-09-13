@@ -36,13 +36,16 @@ class Client:
     self.exit_event = Event()
 
   def connect(self, first_time=False):
-    try:
-      ssl, token = auth_key(self.target, self.key)
-    except TimeoutException as e:
-      if first_time: raise e
-      logging.log(log.Levels.NET, "timed out, trying again.")
-      self.connect()
-      return
+    while True:
+      try:
+        self._connect()
+        return
+      except TimeoutException as e:
+        if first_time: raise e
+        logging.log(log.Levels.NET, "timed out, trying again.")
+
+  def _connect(self):
+    ssl, token = auth_key(self.target, self.key)
 
     if ssl:
       self.ssl = True
