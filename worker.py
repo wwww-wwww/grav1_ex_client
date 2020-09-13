@@ -30,7 +30,8 @@ class Worker:
 
     Thread(target=lambda: self.work(), daemon=True).start()
 
-  def _update_status(self, message):
+  def _update_status(self, *argv):
+    message = " ".join([str(arg) for arg in argv])
     self.status = message
 
   def work(self):
