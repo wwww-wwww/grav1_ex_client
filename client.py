@@ -39,6 +39,11 @@ class Client:
 
     self.exit_event = Event()
 
+  def stop(self):
+    self.job_queue.stop()
+    self.workers.stop()
+    self.exit_event.set()
+
   def connect(self, first_time=False):
     while True:
       try:
@@ -151,7 +156,7 @@ if __name__ == "__main__":
   key = "TJdaaoLTTFCz8AOu+/Ca0SflwksArRHj"
   name = None
   workers = 3
-  queue_size = 0
+  queue_size = 3
 
   client = Client(target, key, name, workers, queue_size)
 
@@ -163,7 +168,7 @@ if __name__ == "__main__":
 
   import screen, curses
 
-  scr = screen.Screen(client.exit_event)
+  scr = screen.Screen(client)
   scr.add_tab(screen.WorkerTab(scr, client))
   scr.add_tab(screen.LogTab(scr, logger))
 

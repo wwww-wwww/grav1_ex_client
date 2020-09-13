@@ -30,6 +30,15 @@ class Worker:
 
     Thread(target=lambda: self.work(), daemon=True).start()
 
+  def kill(self):
+    self.stopped = True
+
+    if self.pipe and self.pipe.poll() is None:
+      self.pipe.kill()
+    
+    if self.job:
+      self.job.dispose()
+
   def _update_status(self, *argv):
     message = " ".join([str(arg) for arg in argv])
     self.status = message

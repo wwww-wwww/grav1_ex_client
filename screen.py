@@ -46,7 +46,7 @@ class LogTab(Tab):
     return [line for lines in [textwrap.wrap(line, width=cols) for line in text] for line in lines][-rows:]
 
 class Screen:
-  def __init__(self, exit_event):
+  def __init__(self, client):
     self.tab = 0
     self.tabs = []
     self.scr = None
@@ -54,7 +54,7 @@ class Screen:
     self.render_lock = Lock()
     self.refresh = Event()
 
-    self.exit_event = exit_event
+    self.client = client
 
     Thread(target=self.screen, daemon=True).start()
 
@@ -114,7 +114,7 @@ class Screen:
       if self.tab >= len(self.tabs) or len(self.tabs) == 0: continue
 
       if c == curses.KEY_F12 or c == ord("q"):
-        self.exit_event.set()
+        self.client.stop()
         return
 
       if c == curses.KEY_F1:
@@ -152,7 +152,7 @@ class Screen:
     
     Thread(target=self.key_loop, args=(scr,), daemon=True).start()
 
-    self.exit_event.wait()
+    self.client.exit_event.wait()
 
     curses.curs_set(1)
 

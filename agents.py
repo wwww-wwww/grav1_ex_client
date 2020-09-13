@@ -17,10 +17,18 @@ class JobQueue:
     self.queue_not_empty = Condition(Lock())
     self.queue_lock = Lock()
 
+  def stop(self):
+    with self.queue_not_empty:
+      self.queue_not_empty.notify_all()
+
   def push(self, segment):
     with self.queue_not_empty:
       self.queue.append(segment)
       self.queue_not_empty.notify()
+    
+    with self.queue_lock:
+      for job in self.queue:
+        job.dispose()
   
   def pop(self):
     if self.queue_size > 0:
@@ -100,9 +108,16 @@ class WorkerStore:
     self.workers = []
 
     self.lock = Lock()
-    
+
     self.stopped = False
   
+  @synchronized
+  def stop(self):
+    self.stopped = True
+    
+    for worker in self.workers:
+      worker.kill()
+
   @synchronized
   def size(self):
     return len(self.workers)
@@ -117,8 +132,11 @@ class WorkerStore:
 
   @synchronized
   def add_worker(self):
-    pass
+    if self.stopped: return
+    self.workers.append(Worker(self.client))
 
   @synchronized
   def remove_worker(self):
-    pass
+    if worker in self.workers:
+      self.workers.remove(worker)
+      #self.client.refresh_screen()
