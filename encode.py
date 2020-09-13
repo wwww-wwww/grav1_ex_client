@@ -90,6 +90,7 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
       if match:
         frames = int(match.group(1))
         worker.progress = (pass_n, frames)
+        worker.update_progress()
         #if pass_n == 2:
         #  worker.update_fps(frames)
         worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(frames, total_frames))

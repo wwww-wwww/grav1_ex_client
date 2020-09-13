@@ -34,7 +34,9 @@ class Worker:
   def as_dict(self):
     return {
       "segment": self.job.segment if self.job else None,
-      "progress": self.progress
+      "progress_num": self.progress[1],
+      "progress_den": self.job.frames if self.job else 0,
+      "pass": self.progress[0]
     }
 
   def kill(self):
@@ -45,6 +47,9 @@ class Worker:
     
     if self.job:
       self.job.dispose()
+
+  def update_progress(self):
+    self.client.push_worker_progress()
 
   def update_status(self, *argv):
     message = " ".join([str(arg) for arg in argv])

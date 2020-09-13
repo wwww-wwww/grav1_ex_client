@@ -169,6 +169,12 @@ class Client:
     url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
     self.segment_store.acquire(job.filename, url, job)
 
+  def push_worker_progress(self):
+    params = {
+      "workers": self.workers.to_list()
+    }
+    self.channel.push("update_workers", params)
+
   def push_job_state(self):
     uploading = None
     if len(self.upload_queue.working) > 0:
