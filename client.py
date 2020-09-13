@@ -1,4 +1,4 @@
-import json, logging, os
+import json, logging, os, sys
 import logger as log
 
 from urllib.parse import urljoin
@@ -92,6 +92,7 @@ class Client:
 
     params = {
       "state": {
+        "platform": sys.platform,
         "workers": [],
         "max_workers": self.workers.max_workers,
         "job_queue": self.get_job_queue(),
@@ -103,7 +104,7 @@ class Client:
     }
 
     if self.name is not None:
-      params["name"] = self.name
+      params["state"]["name"] = self.name
 
     if self.socket_id is not None:
       params["id"] = self.socket_id
