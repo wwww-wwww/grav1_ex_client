@@ -1,53 +1,61 @@
-import subprocess
+import subprocess, re
 
 def aom_vpx_encode(encoder, encoder_path, worker, job):
-  worker.job_started = time.time()
+  #worker.job_started = time.time()
 
   encoder_params = job.encoder_params
   ffmpeg_params = job.ffmpeg_params
 
-  if encoder == "aomenc" and "vmaf" in encoder_params and len(worker.client.args.vmaf_path) > 0:
-    encoder_params += f" --vmaf-model-path={worker.client.args.vmaf_path}"
+  #if encoder == "aomenc" and "vmaf" in encoder_params and len(worker.client.args.vmaf_path) > 0:
+  #  encoder_params += f" --vmaf-model-path={worker.client.args.vmaf_path}"
 
   vfs = [f"select=gte(n\\,{job.start})"]
 
-  vf_match = re.search(r"(?:-vf\s\"([^\"]+?)\"|-vf\s([^\s]+?)\s)", ffmpeg_params)
-
-  if vf_match:
-    vfs.append(vf_match.group(1) or vf_match.group(2))
-    ffmpeg_params = re.sub(r"(?:-vf\s\"([^\"]+?)\"|-vf\s([^\s]+?)\s)", "", ffmpeg_params).strip()
+  if "-vf" in ffmpeg_params:
+    idx = ffmpeg_params.index("-vf")
+    del ffmpeg_params[idx]
+    if idx + 1 < len(ffmpeg_params):
+      vfs.append(ffmpeg_params[idx + 1])
+      del ffmpeg_params[idx + 1]
 
   vf = ",".join(vfs)
 
-  output_filename = f"{job.video}.ivf"
+  output_filename = f"{job.segment}.ivf"
 
   ffmpeg = [
     worker.client.args.ffmpeg, "-y", "-hide_banner",
     "-loglevel", "error",
-    "-i", job.video,
+    "-i", job.filename,
     "-strict", "-1",
     "-pix_fmt", "yuv420p",
     "-vf", vf,
     "-vframes", job.frames
-  ]
-
-  if ffmpeg_params:
-    ffmpeg.extend(ffmpeg_params.split(" "))
+  ] + ffmpeg_params
 
   ffmpeg.extend(["-f", "yuv4mpegpipe", "-"])
 
-  aom = [encoder_path, "-", "--ivf", f"--fpf={job.video}.log", f"--threads={args.threads}", "--passes=2"]
+  aom = [
+    encoder_path,
+    "-",
+    "--ivf",
+    f"--fpf={job.segment}.log",
+    f"--threads=8",
+    f"--passes={job.passes}"
+  ] + encoder_params
 
-  passes = [
-    aom + re.sub(r"--denoise-noise-level=[0-9]+", "", encoder_params).split(" ") + ["--pass=1", "-o", os.devnull],
-    aom + encoder_params.split(" ") + ["--pass=2", "-o", output_filename]
-  ]
+  if job.passes == 2:
+    passes = [
+      aom + ["--pass=1", "-o", os.devnull],
+      aom + ["--pass=2", "-o", output_filename]
+    ]
+  else:
+    passes = aom + ["-o", output_filename]
 
-  if job.grain:
-    if not job.has_grain:
-      return False, None
-    else:
-      passes[1].append(f"--film-grain-table={job.grain}")
+  #if job.grain_table:
+  #  if not job.has_grain:
+  #    return False, None
+  #  else:
+  #    passes[-1].append(f"--film-grain-table={job.grain}")
 
   total_frames = int(job.frames)
 
@@ -64,7 +72,7 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
       universal_newlines=True)
 
     worker.progress = (pass_n, 0)
-    worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(0, total_frames), progress=True)
+    worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(0, total_frames))
 
     while True:
       line = worker.pipe.stdout.readline().strip()
@@ -76,9 +84,9 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
       if match:
         frames = int(match.group(1))
         worker.progress = (pass_n, frames)
-        if pass_n == 2:
-          worker.update_fps(frames)
-        worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(frames, total_frames), progress=True)
+        #if pass_n == 2:
+        #  worker.update_fps(frames)
+        worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(frames, total_frames))
 
     if ffmpeg_pipe.poll() is None:
       ffmpeg_pipe.kill()
@@ -86,7 +94,7 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
     if worker.pipe.returncode != 0:
       success = False
 
-  if os.path.isfile(f"{job.video}.log"):
-    os.remove(f"{job.video}.log")
+  if os.path.isfile(f"{job.segment}.log"):
+    os.remove(f"{job.segment}.log")
 
   return success, output_filename
