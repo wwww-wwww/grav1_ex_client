@@ -1,4 +1,4 @@
-import websocket, json, logging
+import websocket, json, logging, traceback
 from threading import Thread, Event
 from urllib.parse import urlencode
 from .channel import Channel, ChannelEvents
@@ -86,7 +86,10 @@ class Socket:
       Thread(target=lambda: (self.on_open(self), self.connect_event.set()), daemon=True).start()
 
   def _run(self):
-    self.websocket.run_forever(ping_interval=15)
+    try:
+      self.websocket.run_forever(ping_interval=15)
+    except:
+      logging.error(traceback.format_exc)
 
   def send_message(self, topic, event, payload, cb=None, reply=False):
     message = json.dumps(
