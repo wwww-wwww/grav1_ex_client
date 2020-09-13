@@ -15,7 +15,7 @@ class Tab:
   def on_key(self, key): pass
 
   def refresh(self):
-    self.screen.refresh_tab(self)
+    self.screen.refresh_tab(self.name)
 
 class WorkerTab(Tab):
   def __init__(self, screen, client):
@@ -24,6 +24,12 @@ class WorkerTab(Tab):
   
   def header(self, cols):
     return f"Workers: {self.client.workers.size()}"
+
+  def render(self, cols, rows):
+    body = []
+    for worker in self.client.workers.workers:
+      body.append(worker.status)
+    return body
 
 class LogTab(Tab):
   def __init__(self, screen, logger):
@@ -34,7 +40,7 @@ class LogTab(Tab):
     logger.on_message = self.on_message
 
   def on_message(self, message):
-    self.screen.refresh_screen()
+    self.refresh()
 
   def header(self, cols):
     left = "Log"
@@ -43,6 +49,7 @@ class LogTab(Tab):
 
   def render(self, cols, rows):
     text = [message.msg for message in self.logger.messages[-rows:]]
+    text = [line for lines in [t.split("\n") for t in text] for line in lines]
     return [line for lines in [textwrap.wrap(line, width=cols) for line in text] for line in lines][-rows:]
 
 class Screen:
@@ -62,7 +69,7 @@ class Screen:
     self.tabs.append(tab)
 
   def refresh_tab(self, tab):
-    if tab == self.tabs[tab]:
+    if self.tabs[self.tab].name == tab:
       self.refresh_screen()
 
   def screen(self):

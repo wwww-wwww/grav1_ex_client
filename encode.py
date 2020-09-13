@@ -1,6 +1,7 @@
-import subprocess, re
+import subprocess, re, os, logging
+from util import print_progress
 
-def aom_vpx_encode(encoder, encoder_path, worker, job):
+def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
   #worker.job_started = time.time()
 
   encoder_params = job.encoder_params
@@ -23,16 +24,19 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
   output_filename = f"{job.segment}.ivf"
 
   ffmpeg = [
-    worker.client.args.ffmpeg, "-y", "-hide_banner",
+    ffmpeg_path, "-y", "-hide_banner",
     "-loglevel", "error",
     "-i", job.filename,
     "-strict", "-1",
     "-pix_fmt", "yuv420p",
     "-vf", vf,
     "-vframes", job.frames
-  ] + ffmpeg_params
+  ]
 
+  ffmpeg.extend(ffmpeg_params)
   ffmpeg.extend(["-f", "yuv4mpegpipe", "-"])
+
+  ffmpeg = [str(s) for s in ffmpeg]
 
   aom = [
     encoder_path,
@@ -42,6 +46,8 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
     f"--threads=8",
     f"--passes={job.passes}"
   ] + encoder_params
+
+  aom = [str(s) for s in aom]
 
   if job.passes == 2:
     passes = [
@@ -57,7 +63,7 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
   #  else:
   #    passes[-1].append(f"--film-grain-table={job.grain}")
 
-  total_frames = int(job.frames)
+  total_frames = job.frames
 
   success = True
   for pass_n, cmd in enumerate(passes, start=1):
@@ -95,6 +101,8 @@ def aom_vpx_encode(encoder, encoder_path, worker, job):
       success = False
 
   if os.path.isfile(f"{job.segment}.log"):
-    os.remove(f"{job.segment}.log")
+    try:
+      os.remove(f"{job.segment}.log")
+    except: pass
 
   return success, output_filename

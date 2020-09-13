@@ -1,4 +1,5 @@
-import logging
+import logging, traceback, os
+from threading import Thread
 
 class Job:
   def __init__(self, client, params):
@@ -30,6 +31,12 @@ class Worker:
 
     Thread(target=lambda: self.work(), daemon=True).start()
 
+  def as_dict(self):
+    return {
+      "segment": self.job.segment if self.job else None,
+      "progress": self.progress
+    }
+
   def kill(self):
     self.stopped = True
 
@@ -39,44 +46,50 @@ class Worker:
     if self.job:
       self.job.dispose()
 
-  def _update_status(self, *argv):
+  def update_status(self, *argv):
     message = " ".join([str(arg) for arg in argv])
     self.status = message
+    self.client.refresh_screen("Workers")
 
   def work(self):
     while True:
-      self._update_status("waiting")
+      self.update_status("waiting")
 
       if self.client.workers.remove(self): return
 
-      self.job = self.client.job_queue.pop()
+      job = self.client.job_queue.pop(self)
 
       if self.stopped:
-        if self.job:
-          self.job.dispose()
+        if job:
+          job.dispose()
 
         self.client.workers.remove_worker(self)
         return
 
-      if not self.job:
+      self.job = job
+
+      if not job:
         continue
 
+      self.client.push_job_state()
+
       try:
-        success, output = self.client.encode[self.job.encoder](self, self.job)
+        success, output = self.client.encode[self.job.encoder](self, job)
         if self.pipe and self.pipe.poll() is None:
           self.pipe.kill()
 
         self.pipe = None
 
         if success:
-          self.client.upload(self.job, output)
-          self.job.dispose()
+          job.dispose()
           self.job = None
+          self.client.upload(job, output)
         elif output:
           if os.path.exists(output):
             try:
               os.remove(output)
             except: pass
-      except: pass
+      except:
+        logging.error(traceback.format_exc())
 
     self.client.workers.remove_worker(self)

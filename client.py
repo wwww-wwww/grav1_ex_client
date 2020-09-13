@@ -9,13 +9,13 @@ from executor import ThreadPoolExecutor
 
 from phxsocket import Socket
 from auth import auth_key, auth_pass, TimeoutException
-from worker import Worker, Job
+from worker import Job
 from agents import JobQueue, SegmentStore, WorkerStore
 
 from encode import aom_vpx_encode
 
 class Client:
-  def __init__(self, target, key, name, max_workers, queue_size):
+  def __init__(self, target, key, name, max_workers, queue_size, paths):
     self.target = target
     self.ssl = False
 
@@ -33,16 +33,48 @@ class Client:
     self.workers = WorkerStore(self, max_workers)
 
     self.encode = {
-      "aomenc": lambda worker, job: aom_vpx_encode("aom", args.aomenc, worker, job),
-      "vpxenc": lambda worker, job: aom_vpx_encode("vpx", args.vpxenc, worker, job)
+      "aomenc": lambda worker, job: aom_vpx_encode("aom", paths["ffmpeg"], paths["aomenc"], worker, job),
+      "vpxenc": lambda worker, job: aom_vpx_encode("vpx", paths["ffmpeg"], paths["vpxenc"], worker, job)
     }
+
+    self.screen = None
 
     self.exit_event = Event()
 
   def stop(self):
-    self.job_queue.stop()
     self.workers.stop()
+    self.job_queue.stop()
     self.exit_event.set()
+
+  def upload(self, job, output):
+    self.upload_queue.submit(self._upload, job, output)
+    self.push_job_state()
+
+  def _upload(self, job, output):
+    pass
+    """
+    try:
+      with open(output, "rb") as file:
+        files = [("file", (os.path.splitext(job.filename)[0] + os.path.splitext(output)[1], file, "application/octet"))]
+        if self.args.noui:
+          print("uploading to", f"{self.args.target}/finish_job")
+        return self.session.post(
+          f"{self.args.target}/finish_job",
+          data={
+            "id": self.config["id"],
+            "client": job.id,
+            "scene": job.scene,
+            "projectid": job.projectid,
+            "encoder": job.encoder,
+            "version": encoder_versions[job.encoder],
+            "encoder_params": job.encoder_params,
+            "ffmpeg_params": job.ffmpeg_params,
+            "grain": int(len(job.grain) > 0)
+          },
+          files=files)
+    except:
+      return None
+    """
 
   def connect(self, first_time=False):
     while True:
@@ -93,7 +125,7 @@ class Client:
     params = {
       "state": {
         "platform": sys.platform,
-        "workers": [],
+        "workers": self.workers.to_list(),
         "max_workers": self.workers.max_workers,
         "job_queue": self.get_job_queue(),
         "upload_queue": self.get_upload_queue(),
@@ -119,9 +151,12 @@ class Client:
     self.reconnect()
 
   def on_job(self, payload):
-    logging.log(log.Levels.NET, payload)
-    self.segment_store.downloading = payload["segment_id"]
-    self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
+    logging.log(log.Levels.NET, "received job")
+    segment_id = payload["segment_id"]
+    if segment_id in self.get_job_queue() or segment_id in [worker.job.segment for worker in self.workers.workers if worker.job]:
+      return
+    self.segment_store.downloading = segment_id
+    self.channel.push("recv_segment", {"downloading": segment_id})
     self.download(payload["url"], Job(self, payload))
 
   def get_job_queue(self):
@@ -140,7 +175,7 @@ class Client:
       uploading = self.upload_queue.working[0].segment
 
     params = {
-      "workers": [],
+      "workers": self.workers.to_list(),
       "job_queue": self.get_job_queue(),
       "upload_queue": self.get_upload_queue(),
       "downloading": self.segment_store.downloading,
@@ -148,6 +183,13 @@ class Client:
     }
 
     self.channel.push("update", params)
+
+  def set_screen(self, screen):
+    self.screen = screen
+
+  def refresh_screen(self, tab):
+    if self.screen:
+      self.screen.refresh_tab(tab)
 
 if __name__ == "__main__":
   logger = log.Logger()
@@ -159,10 +201,16 @@ if __name__ == "__main__":
   workers = 3
   queue_size = 3
 
-  client = Client(target, key, name, workers, queue_size)
+  paths = {
+    "aomenc": "aomenc",
+    "vpxenc": "vpxenc",
+    "ffmpeg": "ffmpeg"
+  }
 
-  #for i in range(0, int(args.workers)):
-  #  client.add_worker(Worker(client))
+  client = Client(target, key, name, workers, queue_size, paths)
+
+  for i in range(0, int(workers)):
+    client.workers.add_worker()
 
   client.connect(True)
   client.socket.after_connect()
@@ -172,6 +220,8 @@ if __name__ == "__main__":
   scr = screen.Screen(client)
   scr.add_tab(screen.WorkerTab(scr, client))
   scr.add_tab(screen.LogTab(scr, logger))
+
+  client.set_screen(scr)
 
   logging.info("ready")
 

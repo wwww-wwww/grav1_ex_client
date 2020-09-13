@@ -1,4 +1,5 @@
 import os, logging, json, traceback
+from util import synchronized
 import logger as log
 
 from requests import Session
@@ -6,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Condition, Lock
 from collections import deque
 
-from util import synchronized
+from worker import Worker
 
 class JobQueue:
   def __init__(self, client, queue_size):
@@ -21,24 +22,22 @@ class JobQueue:
     with self.queue_not_empty:
       self.queue_not_empty.notify_all()
 
+    for job in self.queue:
+      job.dispose()
+
   def push(self, segment):
     with self.queue_not_empty:
       self.queue.append(segment)
       self.queue_not_empty.notify()
-    
-    with self.queue_lock:
-      for job in self.queue:
-        job.dispose()
   
-  def pop(self):
-    if self.queue_size > 0:
-      with self.queue_lock:
-        with self.queue_not_empty:
-          while len(self.queue) == 0:
-            self.queue_not_empty.wait()
-            if worker.stopped: return None
-          
-          return self.queue.popleft()
+  def pop(self, worker):
+    with self.queue_lock:
+      with self.queue_not_empty:
+        while len(self.queue) == 0:
+          self.queue_not_empty.wait()
+          if worker.stopped: return None
+        
+        return self.queue.popleft()
 
 class SegmentStore:
   def __init__(self, client):
@@ -71,8 +70,7 @@ class SegmentStore:
       logging.log(log.Levels.NET, "finished downloading", job.filename)
       self.downloading = None
       self.client.job_queue.push(job)
-      with self.client.job_queue.queue_lock:
-        self.client.push_job_state()
+      self.client.push_job_state()
     except:
       logging.error(traceback.format_exc())
       if os.path.exists(job.filename):
@@ -96,7 +94,10 @@ class SegmentStore:
     if filename in self.files:
       if self.files[filename] == 1:
         del self.files[filename]
-        os.remove(filename)
+        try:
+          os.remove(filename)
+        except:
+          pass
       else:
         self.files[filename] -= 1
 
@@ -111,6 +112,10 @@ class WorkerStore:
 
     self.stopped = False
   
+  @synchronized
+  def to_list(self):
+    return [worker.as_dict() for worker in self.workers]
+
   @synchronized
   def stop(self):
     self.stopped = True
@@ -136,7 +141,7 @@ class WorkerStore:
     self.workers.append(Worker(self.client))
 
   @synchronized
-  def remove_worker(self):
+  def remove_worker(self, worker):
     if worker in self.workers:
       self.workers.remove(worker)
       #self.client.refresh_screen()
