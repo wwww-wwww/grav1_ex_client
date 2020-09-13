@@ -10,10 +10,12 @@ from executor import ThreadPoolExecutor
 from phxsocket import Socket
 from auth import auth_key, auth_pass, TimeoutException
 from worker import Worker, Job
-from agents import JobQueue, SegmentStore
+from agents import JobQueue, SegmentStore, WorkerStore
+
+from encode import aom_vpx_encode
 
 class Client:
-  def __init__(self, target, key, name, workers, queue_size):
+  def __init__(self, target, key, name, max_workers, queue_size):
     self.target = target
     self.ssl = False
 
@@ -24,14 +26,16 @@ class Client:
     
     self.job_queue = JobQueue(self, queue_size)
     self.segment_store = SegmentStore(self)
-    
-    self.downloading = None
 
     self.socket = None
     self.socket_id = None
 
-    self.max_workers = workers
-    self.workers = []
+    self.workers = WorkerStore(self, max_workers)
+
+    self.encode = {
+      "aomenc": lambda worker, job: aom_vpx_encode("aom", args.aomenc, worker, job),
+      "vpxenc": lambda worker, job: aom_vpx_encode("vpx", args.vpxenc, worker, job)
+    }
 
     self.exit_event = Event()
 
@@ -84,10 +88,10 @@ class Client:
     params = {
       "state": {
         "workers": [],
-        "max_workers": self.max_workers,
+        "max_workers": self.workers.max_workers,
         "job_queue": self.get_job_queue(),
         "upload_queue": self.get_upload_queue(),
-        "downloading": self.downloading,
+        "downloading": self.segment_store.downloading,
         "uploading": uploading,
         "queue_size": self.job_queue.queue_size
       }
@@ -110,8 +114,9 @@ class Client:
 
   def on_job(self, payload):
     logging.log(log.Levels.NET, payload)
+    self.segment_store.downloading = payload["segment_id"]
     self.channel.push("recv_segment", {"downloading": payload["segment_id"]})
-    self.download(payload["url"], Job(payload))
+    self.download(payload["url"], Job(self, payload))
 
   def get_job_queue(self):
     return [job.segment for job in self.job_queue.queue]
@@ -121,7 +126,6 @@ class Client:
 
   def download(self, url, job):
     url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
-    self.downloading = job.segment
     self.segment_store.acquire(job.filename, url, job)
 
   def push_job_state(self):
@@ -133,7 +137,7 @@ class Client:
       "workers": [],
       "job_queue": self.get_job_queue(),
       "upload_queue": self.get_upload_queue(),
-      "downloading": self.downloading,
+      "downloading": self.segment_store.downloading,
       "uploading": uploading
     }
 
@@ -160,7 +164,7 @@ if __name__ == "__main__":
   import screen, curses
 
   scr = screen.Screen(client.exit_event)
-  scr.add_tab(screen.WorkerTab(scr, client.workers))
+  scr.add_tab(screen.WorkerTab(scr, client))
   scr.add_tab(screen.LogTab(scr, logger))
 
   logging.info("ready")

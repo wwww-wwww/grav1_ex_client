@@ -5,25 +5,29 @@ KEY_TAB = ord("\t")
 KEY_R = ord("R")
 
 class Tab:
-  def __init__(self, screen): pass
+  def __init__(self, screen, name):
+    self.screen = screen
+    self.name = name
+
   def header(self, cols): return ""
   def footer(self, cols): return ""
   def render(self, cols, rows): return []
   def on_key(self, key): pass
 
+  def refresh(self):
+    self.screen.refresh_tab(self)
+
 class WorkerTab(Tab):
-  def __init__(self, screen, workers):
-    self.name = "Workers"
-    self.screen = screen
-    self.workers = workers
+  def __init__(self, screen, client):
+    super().__init__(screen, "Workers")
+    self.client = client
   
   def header(self, cols):
-    return f"Workers: {len(self.workers)}"
+    return f"Workers: {self.client.workers.size()}"
 
 class LogTab(Tab):
   def __init__(self, screen, logger):
-    self.name = "Log"
-    self.screen = screen
+    super().__init__(screen, "Log")
     self.logger = logger
     self.scroll = 0
 
@@ -56,6 +60,10 @@ class Screen:
 
   def add_tab(self, tab):
     self.tabs.append(tab)
+
+  def refresh_tab(self, tab):
+    if tab == self.tabs[tab]:
+      self.refresh_screen()
 
   def screen(self):
     while self.refresh.wait():
@@ -105,7 +113,7 @@ class Screen:
 
       if self.tab >= len(self.tabs) or len(self.tabs) == 0: continue
 
-      if c == curses.KEY_F12:
+      if c == curses.KEY_F12 or c == ord("q"):
         self.exit_event.set()
         return
 

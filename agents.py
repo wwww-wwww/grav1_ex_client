@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Condition, Lock
 from collections import deque
 
-from wrapt import decorator
+from util import synchronized
 
 class JobQueue:
   def __init__(self, client, queue_size):
@@ -32,11 +32,6 @@ class JobQueue:
           
           return self.queue.popleft()
 
-@decorator
-def synchronized(wrapped, instance, args, kwargs):
-  with instance.lock:
-    return wrapped(*args, **kwargs)
-
 class SegmentStore:
   def __init__(self, client):
     self.client = client
@@ -45,6 +40,7 @@ class SegmentStore:
 
     self.files = {}
     self.lock = Lock()
+    self.downloading = None
     self.download_executor = ThreadPoolExecutor(max_workers=1)
 
     self.stopping = False
@@ -65,7 +61,7 @@ class SegmentStore:
             file.write(chunk)
       
       logging.log(log.Levels.NET, "finished downloading", job.filename)
-      self.client.downloading = None
+      self.downloading = None
       self.client.job_queue.push(job)
       with self.client.job_queue.queue_lock:
         self.client.push_job_state()
@@ -78,7 +74,7 @@ class SegmentStore:
   def acquire(self, filename, url, job):
     if filename in self.files:
       self.files[filename] += 1
-      self.client.downloading = None
+      self.downloading = None
       self.client.job_queue.push(job)
       with self.client.job_queue.queue_lock:
         self.client.push_job_state()
@@ -95,3 +91,34 @@ class SegmentStore:
         os.remove(filename)
       else:
         self.files[filename] -= 1
+
+class WorkerStore:
+  def __init__(self, client, max_workers):
+    self.client = client
+
+    self.max_workers = max_workers
+    self.workers = []
+
+    self.lock = Lock()
+    
+    self.stopped = False
+  
+  @synchronized
+  def size(self):
+    return len(self.workers)
+
+  @synchronized
+  def remove(self, worker):
+    if len(self.workers) > self.max_workers or self.stopped:
+      self.remove_worker(worker)
+      return True
+    else:
+      return False
+
+  @synchronized
+  def add_worker(self):
+    pass
+
+  @synchronized
+  def remove_worker(self):
+    pass
