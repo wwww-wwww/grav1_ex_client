@@ -2,7 +2,6 @@ import os, logging, json, traceback
 from util import synchronized
 import logger as log
 
-from requests import Session
 from concurrent.futures import ThreadPoolExecutor
 from threading import Condition, Lock
 from collections import deque
@@ -43,8 +42,6 @@ class SegmentStore:
   def __init__(self, client):
     self.client = client
 
-    self.session = Session()
-
     self.files = {}
     self.lock = Lock()
     self.downloading = None
@@ -54,7 +51,7 @@ class SegmentStore:
 
   def download(self, url, job):
     try:
-      r = self.session.get(url)
+      r = self.client.session.get(url)
       with open(job.filename, "wb+") as file:
         downloaded = 0
         total_size = int(r.headers["content-length"])

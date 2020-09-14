@@ -1,4 +1,5 @@
 import json, logging, os, sys
+from requests import Session
 import logger as log
 
 from urllib.parse import urljoin
@@ -22,6 +23,7 @@ class Client:
     self.key = key
     self.name = name
 
+    self.session = Session()
     self.upload_queue = ThreadPoolExecutor(1)
     
     self.job_queue = JobQueue(self, queue_size)
@@ -51,30 +53,22 @@ class Client:
     self.push_job_state()
 
   def _upload(self, job, output):
-    pass
-    """
     try:
       with open(output, "rb") as file:
-        files = [("file", (os.path.splitext(job.filename)[0] + os.path.splitext(output)[1], file, "application/octet"))]
-        if self.args.noui:
-          print("uploading to", f"{self.args.target}/finish_job")
-        return self.session.post(
-          f"{self.args.target}/finish_job",
+        files = [("file", (output, file, "application/octet"))]
+        url = urljoin(self.get_target_url(), "api/finish_segment")
+        logging.log(log.Levels.NET, f"uploading {job.segment} to {url}")
+        self.session.post(url,
           data={
-            "id": self.config["id"],
-            "client": job.id,
-            "scene": job.scene,
-            "projectid": job.projectid,
-            "encoder": job.encoder,
-            "version": encoder_versions[job.encoder],
-            "encoder_params": job.encoder_params,
-            "ffmpeg_params": job.ffmpeg_params,
-            "grain": int(len(job.grain) > 0)
+            "segment": job.segment,
+            "key": self.key,
+            "socket_id": self.socket_id
           },
           files=files)
+
+      self.push_job_state()
     except:
       return None
-    """
 
   def connect(self, first_time=False):
     while True:
@@ -120,7 +114,7 @@ class Client:
 
     uploading = None
     if len(self.upload_queue.working) > 0:
-      uploading = self.upload_queue.working[0].segment
+      uploading = self.upload_queue.working[0].args[0].segment
 
     params = {
       "state": {
@@ -165,8 +159,11 @@ class Client:
   def get_upload_queue(self):
     return [job.args[0].segment for job in list(self.upload_queue.work_queue.queue)]
 
+  def get_target_url(self):
+    return f"http{'s' if self.ssl else ''}://{self.target}"
+
   def download(self, url, job):
-    url = urljoin(f"http{'s' if self.ssl else ''}://{self.target}", url)
+    url = urljoin(self.get_target_url(), url)
     self.segment_store.acquire(job.filename, url, job)
 
   def push_worker_progress(self):
@@ -178,7 +175,7 @@ class Client:
   def push_job_state(self):
     uploading = None
     if len(self.upload_queue.working) > 0:
-      uploading = self.upload_queue.working[0].segment
+      uploading = self.upload_queue.working[0].args[0].segment
 
     params = {
       "workers": self.workers.to_list(),
