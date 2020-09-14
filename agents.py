@@ -17,6 +17,8 @@ class JobQueue:
     self.queue_not_empty = Condition(Lock())
     self.queue_lock = Lock()
 
+    self.ret_lock = Lock()
+
   def stop(self):
     with self.queue_not_empty:
       self.queue_not_empty.notify_all()
@@ -26,7 +28,8 @@ class JobQueue:
 
   def push(self, segment):
     with self.queue_not_empty:
-      self.queue.append(segment)
+      with self.ret_lock:
+        self.queue.append(segment)
       self.queue_not_empty.notify()
   
   def pop(self, worker):
@@ -35,8 +38,9 @@ class JobQueue:
         while len(self.queue) == 0:
           self.queue_not_empty.wait()
           if worker.stopped: return None
-        
-        return self.queue.popleft()
+
+        with self.ret_lock:
+          return self.queue.popleft()
 
 class SegmentStore:
   def __init__(self, client):
