@@ -1,4 +1,4 @@
-import json, logging, os, sys
+import json, logging, os, sys, traceback
 from requests import Session
 import logger as log
 
@@ -49,7 +49,7 @@ class Client:
     self.exit_event.set()
 
   def upload(self, job, output):
-    self.upload_queue.submit(self._upload, job, output)
+    self.upload_queue.submit(self._upload, self._after_upload, job, output)
     self.push_job_state()
 
   def _upload(self, job, output):
@@ -58,17 +58,24 @@ class Client:
         files = [("file", (output, file, "application/octet"))]
         url = urljoin(self.get_target_url(), "api/finish_segment")
         logging.log(log.Levels.NET, f"uploading {job.segment} to {url}")
-        self.session.post(url,
+        r = self.session.post(url,
           data={
             "segment": job.segment,
             "key": self.key,
-            "socket_id": self.socket_id
+            "socket_id": self.socket_id,
+            "encode_settings": json.dumps({
+              "encoder_params": job.encoder_params,
+              "ffmpeg_params": job.ffmpeg_params,
+              "passes": job.passes
+            })
           },
           files=files)
-
-      self.push_job_state()
+        logging.log(log.Levels.NET, r.json())
     except:
-      return None
+      logging.error(traceback.format_exc())
+
+  def _after_upload(self, job, output):
+    self.push_job_state()
 
   def connect(self, first_time=False):
     while True:
@@ -154,7 +161,8 @@ class Client:
     self.download(payload["url"], Job(self, payload))
 
   def get_job_queue(self):
-    return [job.segment for job in self.job_queue.queue]
+    with self.job_queue.ret_lock:
+      return [job.segment for job in self.job_queue.queue]
 
   def get_upload_queue(self):
     return [job.args[0].segment for job in list(self.upload_queue.work_queue.queue)]
@@ -199,7 +207,7 @@ if __name__ == "__main__":
   logger.setup()
 
   target = "192.168.1.50:4000"
-  key = "TJdaaoLTTFCz8AOu+/Ca0SflwksArRHj"
+  key = "EaJi9Xxy4PWVkes/eJhMbGJ+I/l/Yfwj"
   name = None
   workers = 3
   queue_size = 3

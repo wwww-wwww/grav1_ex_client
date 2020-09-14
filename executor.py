@@ -2,9 +2,8 @@
 # https://github.com/python/cpython/blob/master/Lib/concurrent/futures/thread.py
 # with accessible work queue and working list
 
-import os, threading, itertools, weakref
+import os, threading, itertools, weakref, types
 from concurrent.futures import _base
-from concurrent.futures.thread import _WorkItem
 from queue import Queue
 
 _threads_queues = weakref.WeakKeyDictionary()
@@ -12,6 +11,30 @@ _shutdown = False
 # Lock that ensures that new workers are not created while the interpreter is
 # shutting down. Must be held while mutating _threads_queues and _shutdown.
 _global_shutdown_lock = threading.Lock()
+
+class _WorkItem(object):
+  def __init__(self, future, fn, fn2, args, kwargs):
+    self.future = future
+    self.fn = fn
+    self.fn2 = fn2
+    self.args = args
+    self.kwargs = kwargs
+
+  def run(self):
+    if not self.future.set_running_or_notify_cancel():
+      return
+
+    try:
+      result = self.fn(*self.args, **self.kwargs)
+    except BaseException as exc:
+      self.future.set_exception(exc)
+      # Break a reference cycle with the exception 'exc'
+      self = None
+    else:
+      self.future.set_result(result)
+
+  def after(self):
+    self.fn2(*self.args, **self.kwargs)
 
 def _worker(executor_reference, work_queue, working):
   try:
@@ -21,6 +44,7 @@ def _worker(executor_reference, work_queue, working):
         working.append(work_item)
         work_item.run()
         working.remove(work_item)
+        work_item.after()
 
         # Delete references to object. See issue16284
         del work_item
@@ -69,7 +93,7 @@ class ThreadPoolExecutor(_base.Executor):
     self._shutdown_lock = threading.Lock()
     self._thread_name_prefix = ("ThreadPoolExecutor-%d" % self._counter())
 
-  def submit(self, fn, /, *args, **kwargs):
+  def submit(self, fn, fn2, /, *args, **kwargs):
     with self._shutdown_lock, _global_shutdown_lock:
 
       if self._shutdown:
@@ -79,7 +103,7 @@ class ThreadPoolExecutor(_base.Executor):
         raise RuntimeError("cannot schedule new futures after interpreter shutdown")
 
       f = _base.Future()
-      w = _WorkItem(f, fn, args, kwargs)
+      w = _WorkItem(f, fn, fn2, args, kwargs)
 
       self.work_queue.put(w)
       self._adjust_thread_count()
