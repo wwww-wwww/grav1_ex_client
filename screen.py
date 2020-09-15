@@ -21,14 +21,27 @@ class WorkerTab(Tab):
   def __init__(self, screen, client):
     super().__init__(screen, "Workers")
     self.client = client
+    self.scroll = 0
   
+  def on_key(self, key):
+    if key == curses.KEY_UP:
+      self.scroll -= 1
+      self.refresh()
+    elif key == curses.KEY_DOWN:
+      self.scroll += 1
+      self.refresh()
+
   def header(self, cols):
     return f"Workers: {self.client.workers.size()}"
 
   def render(self, cols, rows):
     body = []
-    for worker in self.client.workers.workers:
-      body.append(worker.status)
+    
+    self.scroll = max(min(self.scroll, self.client.workers.size() - rows), 0)
+
+    for k, worker in enumerate(self.client.workers.workers[self.scroll:rows + self.scroll], 1 + self.scroll):
+      body.append("{:2d} {}".format(k, worker.status))
+    
     return body
 
 class LogTab(Tab):
@@ -77,38 +90,41 @@ class Screen:
       if not self.scr: continue
       if self.tab >= len(self.tabs): continue
       with self.render_lock:
-        tab = self.tabs[self.tab]
+        try:
+          tab = self.tabs[self.tab]
 
-        (mlines, mcols) = self.scr.getmaxyx()
+          (mlines, mcols) = self.scr.getmaxyx()
 
-        header_text = tab.header(mcols)
-        footer_text = tab.footer(mcols)
+          header_text = tab.header(mcols)
+          footer_text = tab.footer(mcols)
 
-        header = [line for line in textwrap.wrap(header_text, width=mcols)]
-        footer = [line for line in textwrap.wrap(footer_text, width=mcols)]
-        
-        footer2 = " ".join([f"F{i} {t.name} " for i, t in enumerate(self.tabs, 1)])
-        footer2_right = "F12 Quit"
-        footer2 = f"{footer2}{' ' * max(mcols - len(footer2 + footer2_right), 1)}{footer2_right}"
-        footer2 = [line for line in textwrap.wrap(footer2, width=mcols)]
+          header = [line for line in textwrap.wrap(header_text, width=mcols)]
+          footer = [line for line in textwrap.wrap(footer_text, width=mcols)]
+          
+          footer2 = " ".join([f"F{i} {t.name} " for i, t in enumerate(self.tabs, 1)])
+          footer2_right = "F12 Quit"
+          footer2 = f"{footer2}{' ' * max(mcols - len(footer2 + footer2_right), 1)}{footer2_right}"
+          footer2 = [line for line in textwrap.wrap(footer2, width=mcols)]
 
-        body = tab.render(mcols, mlines - len(header) - len(footer) - len(footer2))
+          body = tab.render(mcols, mlines - len(header) - len(footer) - len(footer2))
 
-        self.scr.erase()
+          self.scr.erase()
 
-        for i, line in enumerate(header):
-          self.scr.insstr(i, 0, line.ljust(mcols), curses.color_pair(1))
+          for i, line in enumerate(header):
+            self.scr.insstr(i, 0, line.ljust(mcols), curses.color_pair(1))
 
-        for i, line in enumerate(body, len(header)):
-          self.scr.insstr(i, 0, line)
+          for i, line in enumerate(body, len(header)):
+            self.scr.insstr(i, 0, line)
 
-        for i, line in enumerate(footer, mlines - len(footer) - len(footer2)):
-          self.scr.insstr(i, 0, line, curses.color_pair(1))
+          for i, line in enumerate(footer, mlines - len(footer) - len(footer2)):
+            self.scr.insstr(i, 0, line, curses.color_pair(1))
 
-        for i, line in enumerate(footer2, mlines - len(footer2)):
-          self.scr.insstr(i, 0, line, curses.color_pair(1))
+          for i, line in enumerate(footer2, mlines - len(footer2)):
+            self.scr.insstr(i, 0, line, curses.color_pair(1))
 
-        self.scr.refresh()
+          self.scr.refresh()
+        except: pass
+
       self.refresh.clear()
 
   def refresh_screen(self):

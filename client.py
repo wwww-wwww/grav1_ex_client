@@ -15,6 +15,8 @@ from agents import JobQueue, SegmentStore, WorkerStore
 
 from encode import aom_vpx_encode
 
+import ratelimit
+
 class Client:
   def __init__(self, target, key, name, max_workers, queue_size, paths):
     self.target = target
@@ -184,10 +186,11 @@ class Client:
     self.segment_store.acquire(job.filename, url, job)
 
   def push_worker_progress(self):
-    params = {
-      "workers": self.workers.to_list()
-    }
-    self.channel.push("update_workers", params)
+    if ratelimit.can_execute("worker_progress", 1 / 4):
+      params = {
+        "workers": self.workers.to_list()
+      }
+      self.channel.push("update_workers", params)
 
   def push_job_state(self):
     uploading = None
@@ -218,7 +221,7 @@ if __name__ == "__main__":
   target = "192.168.1.50:4000"
   key = "GD6vv99ykFgES2jwQHJsU/p7dMLMSVVy"
   name = None
-  workers = 3
+  workers = 10
   queue_size = 3
 
   paths = {

@@ -26,7 +26,6 @@ class Worker:
     self.status = ""
     self.pipe = None
     self.progress = (0, 0)
-    self.id = 0
 
     self.stopped = False
     self.cancel_job = False
@@ -43,6 +42,7 @@ class Worker:
 
   def kill(self):
     self.stopped = True
+    self.cancel_job = True
 
     if self.pipe and self.pipe.poll() is None:
       self.pipe.kill()

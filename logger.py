@@ -27,6 +27,7 @@ class Logger(logging.Handler):
     msg = LogMessage(record, formatted)
 
     self.messages.append(msg)
+    self.messages = self.messages[-1000:]
 
     if self.on_message:
       self.on_message(msg)
