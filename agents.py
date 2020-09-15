@@ -138,7 +138,7 @@ class WorkerStore:
   def cancel(self, segment):
     for worker in self.workers:
       if worker.job != None and worker.job.segment == segment:
-        worker.cancel_job()
+        worker.cancel()
 
   @synchronized
   def remove(self, worker):

@@ -152,6 +152,9 @@ class Client:
     self.channel.on("cancel", self.on_cancel)
     self.socket_id = self.channel.join()
 
+    self.progress_channel = socket.channel("worker_progress")
+    self.progress_channel.join()
+
     logging.log(log.Levels.NET, "connected to channel")
 
   def on_close(self, socket):
@@ -190,7 +193,7 @@ class Client:
       params = {
         "workers": self.workers.to_list()
       }
-      self.channel.push("update_workers", params)
+      self.progress_channel.push("update_workers", params)
 
   def push_job_state(self):
     uploading = None
@@ -221,7 +224,7 @@ if __name__ == "__main__":
   target = "192.168.1.50:4000"
   key = "GD6vv99ykFgES2jwQHJsU/p7dMLMSVVy"
   name = None
-  workers = 10
+  workers = 4
   queue_size = 3
 
   paths = {

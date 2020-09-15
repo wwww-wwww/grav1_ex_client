@@ -32,7 +32,13 @@ class WorkerTab(Tab):
       self.refresh()
 
   def header(self, cols):
-    return f"Workers: {self.client.workers.size()}"
+    active_workers = len([worker for worker in self.client.workers.workers if worker.job != None])
+    return "Workers: {} Active: {} Queue: {} Uploading: {}".format(
+      self.client.workers.size(),
+      active_workers,
+      len(self.client.job_queue.queue),
+      len(self.client.upload_queue.work_queue.queue) + len(self.client.upload_queue.working)
+    )
 
   def render(self, cols, rows):
     body = []

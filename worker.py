@@ -100,6 +100,9 @@ class Worker:
           self.client.upload(job, output)
           
       except:
+        job.dispose()
+        self.job = None
+        self.client.push_job_state()
         logging.error(traceback.format_exc())
 
     self.client.workers.remove_worker(self)
