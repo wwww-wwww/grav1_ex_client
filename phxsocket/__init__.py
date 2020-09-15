@@ -89,7 +89,7 @@ class Socket:
     try:
       self.websocket.run_forever(ping_interval=15)
     except:
-      logging.error(traceback.format_exc)
+      logging.error(traceback.format_exc())
 
   def send_message(self, topic, event, payload, cb=None, reply=False):
     message = json.dumps(

@@ -1,6 +1,9 @@
 import subprocess, re, os, logging
 from util import print_progress
 
+class EncodingException(Exception):
+  pass
+
 def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
   #worker.job_started = time.time()
 
@@ -65,7 +68,6 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
 
   total_frames = job.frames
 
-  success = True
   for pass_n, cmd in enumerate(passes, start=1):
     ffmpeg_pipe = subprocess.Popen(ffmpeg,
       stdout=subprocess.PIPE,
@@ -80,8 +82,10 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
     worker.progress = (pass_n, 0)
     worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(0, total_frames))
 
+    output = []
     while True:
       line = worker.pipe.stdout.readline().strip()
+      output.append(line)
 
       if len(line) == 0 and worker.pipe.poll() is not None:
         break
@@ -99,11 +103,17 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
       ffmpeg_pipe.kill()
 
     if worker.pipe.returncode != 0:
-      success = False
+      logging.error("\n".join(output))
+      raise EncodingException()
+    
+      if os.path.exists(output_filename):
+        try:
+          os.remove(output_filename)
+        except: pass
 
   if os.path.isfile(f"{job.segment}.log"):
     try:
       os.remove(f"{job.segment}.log")
     except: pass
 
-  return success, output_filename
+  return output_filename

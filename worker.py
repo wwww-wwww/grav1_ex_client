@@ -44,7 +44,7 @@ class Worker:
 
     if self.pipe and self.pipe.poll() is None:
       self.pipe.kill()
-    
+
     if self.job:
       self.job.dispose()
 
@@ -79,21 +79,15 @@ class Worker:
       self.client.push_job_state()
 
       try:
-        success, output = self.client.encode[self.job.encoder](self, job)
+        output = self.client.encode[self.job.encoder](self, job)
         if self.pipe and self.pipe.poll() is None:
           self.pipe.kill()
 
         self.pipe = None
 
-        if success:
-          job.dispose()
-          self.job = None
-          self.client.upload(job, output)
-        elif output:
-          if os.path.exists(output):
-            try:
-              os.remove(output)
-            except: pass
+        job.dispose()
+        self.job = None
+        self.client.upload(job, output)
       except:
         logging.error(traceback.format_exc())
 

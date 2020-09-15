@@ -70,9 +70,12 @@ class Client:
             })
           },
           files=files)
+        
         logging.log(log.Levels.NET, r.json())
     except:
       logging.error(traceback.format_exc())
+    finally:
+      os.remove(output)
 
   def _after_upload(self, job, output):
     self.push_job_state()
@@ -207,7 +210,7 @@ if __name__ == "__main__":
   logger.setup()
 
   target = "192.168.1.50:4000"
-  key = "EaJi9Xxy4PWVkes/eJhMbGJ+I/l/Yfwj"
+  key = "GD6vv99ykFgES2jwQHJsU/p7dMLMSVVy"
   name = None
   workers = 3
   queue_size = 3
