@@ -13,7 +13,7 @@ class Job:
     self.encoder_params = params["encoder_params"]
     self.ffmpeg_params = params["ffmpeg_params"]
     self.grain_table = params["grain_table"]
-    self.filename = params["split_name"]
+    self.filename = "tmp{}".format(params["split_name"])
 
   def dispose(self):
     self.client.segment_store.release(self.filename)
@@ -25,9 +25,11 @@ class Worker:
     
     self.status = ""
     self.pipe = None
-    self.stopped = False
     self.progress = (0, 0)
     self.id = 0
+
+    self.stopped = False
+    self.cancel_job = False
 
     Thread(target=lambda: self.work(), daemon=True).start()
 
@@ -48,6 +50,11 @@ class Worker:
     if self.job:
       self.job.dispose()
 
+  def cancel(self):
+    self.cancel_job = True
+    if self.pipe and self.pipe.poll() is None:
+      self.pipe.kill()
+
   def update_progress(self):
     self.client.push_worker_progress()
 
@@ -62,19 +69,18 @@ class Worker:
 
       if self.client.workers.remove(self): return
 
+      self.job = None
+      self.cancel_job = False
+
       job = self.client.job_queue.pop(self)
 
-      if self.stopped:
-        if job:
-          job.dispose()
-
-        self.client.workers.remove_worker(self)
-        return
+      if job and (self.stopped or self.cancel_job):
+        job.dispose()
+        
+      if self.stopped or not job:
+        continue
 
       self.job = job
-
-      if not job:
-        continue
 
       self.client.push_job_state()
 
@@ -87,7 +93,12 @@ class Worker:
 
         job.dispose()
         self.job = None
-        self.client.upload(job, output)
+
+        if self.cancel_job:
+          os.remove(output)
+        else:
+          self.client.upload(job, output)
+          
       except:
         logging.error(traceback.format_exc())
 

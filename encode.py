@@ -5,8 +5,6 @@ class EncodingException(Exception):
   pass
 
 def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
-  #worker.job_started = time.time()
-
   encoder_params = job.encoder_params
   ffmpeg_params = job.ffmpeg_params
 
@@ -24,7 +22,8 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
 
   vf = ",".join(vfs)
 
-  output_filename = f"{job.segment}.ivf"
+  output_filename = "tmp{}.ivf".format(job.segment)
+  log_path = "tmp{}.log".format(job.segment)
 
   ffmpeg = [
     ffmpeg_path, "-y", "-hide_banner",
@@ -45,9 +44,9 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
     encoder_path,
     "-",
     "--ivf",
-    f"--fpf={job.segment}.log",
     f"--threads=8",
     f"--passes={job.passes}"
+    "--fpf={}".format(log_path),
   ] + encoder_params
 
   aom = [str(s) for s in aom]
@@ -85,35 +84,38 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
     output = []
     while True:
       line = worker.pipe.stdout.readline().strip()
-      output.append(line)
 
-      if len(line) == 0 and worker.pipe.poll() is not None:
+      if len(line) == 0 and worker.pipe.poll() is not None or worker.cancel_job or worker.stopped:
         break
+      
+      output.append(line)
 
       match = re.search(r"frame.*?\/([^ ]+?) ", line)
       if match:
         frames = int(match.group(1))
         worker.progress = (pass_n, frames)
         worker.update_progress()
-        #if pass_n == 2:
-        #  worker.update_fps(frames)
         worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(frames, total_frames))
 
     if ffmpeg_pipe.poll() is None:
       ffmpeg_pipe.kill()
 
+    if worker.pipe.poll() is None:
+      worker.pipe.kill()
+
     if worker.pipe.returncode != 0:
       logging.error("\n".join(output))
-      raise EncodingException()
-    
+
       if os.path.exists(output_filename):
         try:
           os.remove(output_filename)
         except: pass
 
-  if os.path.isfile(f"{job.segment}.log"):
+      raise EncodingException()
+
+  if os.path.isfile(log_path):
     try:
-      os.remove(f"{job.segment}.log")
+      os.remove(log_path)
     except: pass
 
   return output_filename

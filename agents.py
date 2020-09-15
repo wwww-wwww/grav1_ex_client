@@ -26,6 +26,13 @@ class JobQueue:
     for job in self.queue:
       job.dispose()
 
+  def cancel(self, segment):
+    with self.ret_lock:
+      for e in self.queue:
+        if e.segment == segment:
+          self.queue.remove(e)
+          e.dispose()
+
   def push(self, segment):
     with self.queue_not_empty:
       with self.ret_lock:
@@ -128,8 +135,14 @@ class WorkerStore:
     return len(self.workers)
 
   @synchronized
+  def cancel(self, segment):
+    for worker in self.workers:
+      if worker.job != None and worker.job.segment == segment:
+        worker.cancel_job()
+
+  @synchronized
   def remove(self, worker):
-    if len(self.workers) > self.max_workers or self.stopped:
+    if len(self.workers) > self.max_workers or self.stopped or worker.stopped:
       self.remove_worker(worker)
       return True
     else:
@@ -144,4 +157,4 @@ class WorkerStore:
   def remove_worker(self, worker):
     if worker in self.workers:
       self.workers.remove(worker)
-      #self.client.refresh_screen()
+      self.client.refresh_screen("Workers")

@@ -147,6 +147,7 @@ class Client:
 
     self.channel = socket.channel("worker", params)
     self.channel.on("push_segment", self.on_job)
+    self.channel.on("cancel", self.on_cancel)
     self.socket_id = self.channel.join()
 
     logging.log(log.Levels.NET, "connected to channel")
@@ -162,6 +163,10 @@ class Client:
     self.segment_store.downloading = segment_id
     self.channel.push("recv_segment", {"downloading": segment_id})
     self.download(payload["url"], Job(self, payload))
+
+  def on_cancel(self, payload):
+    self.job_queue.cancel(payload["segment"])
+    self.workers.cancel(payload["segment"])
 
   def get_job_queue(self):
     with self.job_queue.ret_lock:
