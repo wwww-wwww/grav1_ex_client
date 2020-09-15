@@ -165,8 +165,9 @@ class Client:
     self.download(payload["url"], Job(self, payload))
 
   def on_cancel(self, payload):
-    self.job_queue.cancel(payload["segment"])
-    self.workers.cancel(payload["segment"])
+    for segment in payload["segments"]:
+      self.job_queue.cancel(segment)
+      self.workers.cancel(segment)
 
   def get_job_queue(self):
     with self.job_queue.ret_lock:
