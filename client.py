@@ -74,7 +74,7 @@ class Client:
               "passes": job.passes
             })
           },
-          files=files)
+          files=files, timeout=5)
 
         j = r.json()
         logging.log(log.Levels.NET, j)
@@ -87,7 +87,10 @@ class Client:
     except:
       logging.error(traceback.format_exc())
     finally:
-      os.remove(output)
+      try:
+        os.remove(output)
+      except:
+        logging.error(traceback.format_exc())
 
   def _after_upload(self, job, output):
     self.push_job_state()
