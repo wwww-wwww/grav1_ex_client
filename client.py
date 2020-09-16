@@ -36,6 +36,9 @@ class Client:
 
     self.workers = WorkerStore(self, max_workers)
 
+    self.hit = 0
+    self.miss = 0
+
     self.encode = {
       "aomenc": lambda worker, job: aom_vpx_encode("aom", paths["ffmpeg"], paths["aomenc"], worker, job),
       "vpxenc": lambda worker, job: aom_vpx_encode("vpx", paths["ffmpeg"], paths["vpxenc"], worker, job)
@@ -72,8 +75,15 @@ class Client:
             })
           },
           files=files)
-        
-        logging.log(log.Levels.NET, r.json())
+
+        j = r.json()
+        logging.log(log.Levels.NET, j)
+
+        if j["success"]:
+          self.hit += 1
+        else:
+          self.miss += 1
+
     except:
       logging.error(traceback.format_exc())
     finally:
@@ -163,7 +173,7 @@ class Client:
   def on_job(self, payload):
     logging.log(log.Levels.NET, "received job")
     segment_id = payload["segment_id"]
-    if segment_id in self.get_job_queue() or segment_id in [worker.job.segment for worker in self.workers.workers if worker.job]:
+    if segment_id in self.get_job_queue() or segment_id == self.segment_store.downloading or segment_id in [worker.job.segment for worker in self.workers.workers if worker.job]:
       return
     self.segment_store.downloading = segment_id
     self.channel.push("recv_segment", {"downloading": segment_id})
@@ -189,7 +199,8 @@ class Client:
     self.segment_store.acquire(job.filename, url, job)
 
   def push_worker_progress(self):
-    if ratelimit.can_execute("worker_progress", 1 / 4):
+    if not self.progress_channel: return
+    if ratelimit.can_execute("worker_progress", 1):
       params = {
         "workers": self.workers.to_list()
       }

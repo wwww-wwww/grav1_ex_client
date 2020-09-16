@@ -33,11 +33,13 @@ class WorkerTab(Tab):
 
   def header(self, cols):
     active_workers = len([worker for worker in self.client.workers.workers if worker.job != None])
-    return "Workers: {} Active: {} Queue: {} Uploading: {}".format(
+    return "Workers: {} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {}".format(
       self.client.workers.size(),
       active_workers,
       len(self.client.job_queue.queue),
-      len(self.client.upload_queue.work_queue.queue) + len(self.client.upload_queue.working)
+      len(self.client.upload_queue.work_queue.queue) + len(self.client.upload_queue.working),
+      self.client.hit,
+      self.client.miss
     )
 
   def render(self, cols, rows):
