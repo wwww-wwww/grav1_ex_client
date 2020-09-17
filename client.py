@@ -254,7 +254,7 @@ if __name__ == "__main__":
     "ffmpeg": "ffmpeg"
   }
 
-  client = Client(args.target, key, args.name, args.workers, args.queue, paths)
+  client = Client(args.target, args.key, args.name, args.workers, args.queue, paths)
 
   for i in range(0, int(args.workers)):
     client.workers.add_worker()
