@@ -235,11 +235,18 @@ if __name__ == "__main__":
   logger = log.Logger()
   logger.setup()
 
-  target = "192.168.1.50:4000"
-  key = "GD6vv99ykFgES2jwQHJsU/p7dMLMSVVy"
-  name = None
-  workers = 4
-  queue_size = 3
+  import argparse
+
+  parser = argparse.ArgumentParser()
+
+  parser.add_argument("target", type=str, nargs="?", default="localhost:4000")
+  parser.add_argument("--key", type=str, required=True)
+  parser.add_argument("--workers", dest="workers", default=1)
+  parser.add_argument("--threads", dest="threads", default=8)
+  parser.add_argument("--queue", default=3)
+  parser.add_argument("--name", default=None)
+
+  args = parser.parse_args()
 
   paths = {
     "aomenc": "aomenc",
@@ -247,9 +254,9 @@ if __name__ == "__main__":
     "ffmpeg": "ffmpeg"
   }
 
-  client = Client(target, key, name, workers, queue_size, paths)
+  client = Client(args.target, key, args.name, args.workers, args.queue, paths)
 
-  for i in range(0, int(workers)):
+  for i in range(0, int(args.workers)):
     client.workers.add_worker()
 
   client.connect(True)
