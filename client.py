@@ -13,6 +13,7 @@ from auth import auth_key, auth_pass, TimeoutException
 from worker import Job
 from agents import JobQueue, SegmentStore, WorkerStore
 
+from versions import get_version
 from encode import aom_vpx_encode
 
 import ratelimit
@@ -39,9 +40,16 @@ class Client:
     self.hit = 0
     self.miss = 0
 
+    self.paths = paths
+
     self.encode = {
       "aomenc": lambda worker, job: aom_vpx_encode("aom", paths["ffmpeg"], paths["aomenc"], worker, job),
       "vpxenc": lambda worker, job: aom_vpx_encode("vpx", paths["ffmpeg"], paths["vpxenc"], worker, job)
+    }
+
+    self.versions = {
+      "aomenc": get_version("aomenc", paths["aomenc"]),
+      "vpxenc": get_version("vpxenc", paths["vpxenc"])
     }
 
     self.screen = None
@@ -114,7 +122,7 @@ class Client:
     logging.log(log.Levels.NET, "connecting to websocket")
 
     socket_url = f"ws{'s' if ssl else ''}://{self.target}/websocket"
-    socket = Socket(socket_url, {"token": token})
+    socket = Socket(socket_url, {"token": token, "versions": self.versions})
     self.socket = socket
 
     socket.on_open = self.on_open
