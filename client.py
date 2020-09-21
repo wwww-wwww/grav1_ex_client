@@ -248,21 +248,24 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
 
   parser.add_argument("target", type=str, nargs="?", default="localhost:4000")
-  parser.add_argument("--key", type=str, required=True)
+  parser.add_argument("--key", type=str, required=True, help="API key")
   parser.add_argument("--workers", dest="workers", default=1)
   parser.add_argument("--threads", dest="threads", default=8)
   parser.add_argument("--queue", default=3)
-  parser.add_argument("--name", default=None)
+  parser.add_argument("--name", default=None, help="Name of the client")
+  parser.add_argument("--aomenc", default="aomenc", help="Path to aomenc (default: aomenc)")
+  parser.add_argument("--vpxenc", default="vpxenc", help="Path to vpxenc (default: vpxenc)")
+  parser.add_argument("--ffmpeg", default="ffmpeg", help="Path to ffmpeg (default: ffmpeg)")
 
   args = parser.parse_args()
 
   paths = {
-    "aomenc": "aomenc",
-    "vpxenc": "vpxenc",
-    "ffmpeg": "ffmpeg"
+    "aomenc": args.aomenc,
+    "vpxenc": args.vpxenc,
+    "ffmpeg": args.ffmpeg
   }
 
-  client = Client(args.target, args.key, args.name, args.workers, args.queue, paths)
+  client = Client(args.target, args.key, args.name, int(args.workers), int(args.queue), paths)
 
   for i in range(0, int(args.workers)):
     client.workers.add_worker()
