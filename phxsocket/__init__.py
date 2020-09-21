@@ -1,7 +1,7 @@
 import websocket, json, logging, traceback
 from threading import Thread, Event
 from urllib.parse import urlencode
-from .channel import Channel, ChannelEvents
+from .channel import Channel, ChannelEvents, ChannelConnectException
 from collections import namedtuple
 
 Message = namedtuple(
@@ -47,11 +47,12 @@ class Socket:
       on_message=lambda ws, message: self._on_message(ws, message),
       on_error=lambda ws, error: self._on_error(ws, error),
       on_close=lambda ws: self._on_close(ws),
-      on_open=lambda ws: self._on_open(ws)
+      on_open=lambda ws: Thread(target=self._on_open, args=[ws], daemon=True).start()
     )
 
     self.thread = None
     self.connect_event = Event()
+    self.on_open_exc = None
 
   def _on_message(self, ws, _message):
     message = decode(_message)
@@ -82,8 +83,13 @@ class Socket:
       self.on_close(self)
 
   def _on_open(self, ws):
-    if self.on_open is not None:
-      Thread(target=lambda: (self.on_open(self), self.connect_event.set()), daemon=True).start()
+    try:
+      if self.on_open is not None:
+        self.on_open(self)
+    except Exception as e:
+      self.on_open_exc = e
+    finally:
+      self.connect_event.set()
 
   def _run(self):
     try:
@@ -126,3 +132,5 @@ class Socket:
 
   def after_connect(self):
     self.connect_event.wait()
+    if self.on_open_exc:
+      raise self.on_open_exc

@@ -22,6 +22,7 @@ class Client:
   def __init__(self, target, key, name, max_workers, queue_size, paths):
     self.target = target
     self.ssl = False
+    self.first_start = True
 
     self.key = key
     self.name = name
@@ -103,13 +104,13 @@ class Client:
   def _after_upload(self, job, output):
     self.push_job_state()
 
-  def connect(self, first_time=False):
+  def connect(self):
     while True:
       try:
         self._connect()
         return
       except TimeoutException as e:
-        if first_time: raise e
+        if self.first_start: raise e
         logging.log(log.Levels.NET, "timed out, trying again.")
 
   def _connect(self):
@@ -122,7 +123,7 @@ class Client:
     logging.log(log.Levels.NET, "connecting to websocket")
 
     socket_url = f"ws{'s' if ssl else ''}://{self.target}/websocket"
-    socket = Socket(socket_url, {"token": token, "versions": self.versions})
+    socket = Socket(socket_url, {"token": token})
     self.socket = socket
 
     socket.on_open = self.on_open
@@ -140,7 +141,7 @@ class Client:
     self.connect()
 
   def on_error(self, socket, message):
-    logging.log(log.Levels.NET, message)
+    print(message)
 
   def on_open(self, socket):
     logging.log(log.Levels.NET, "websocket opened")
@@ -159,7 +160,8 @@ class Client:
         "downloading": self.segment_store.downloading,
         "uploading": uploading,
         "queue_size": self.job_queue.queue_size
-      }
+      },
+      "versions": self.versions
     }
 
     if self.name is not None:
@@ -171,7 +173,10 @@ class Client:
     self.channel = socket.channel("worker", params)
     self.channel.on("push_segment", self.on_job)
     self.channel.on("cancel", self.on_cancel)
+
     self.socket_id = self.channel.join()
+
+    self.first_start = False
 
     self.progress_channel = socket.channel("worker_progress")
     self.progress_channel.join()
@@ -270,7 +275,7 @@ if __name__ == "__main__":
   for i in range(0, int(args.workers)):
     client.workers.add_worker()
 
-  client.connect(True)
+  client.connect()
   client.socket.after_connect()
 
   import screen, curses
