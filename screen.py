@@ -166,6 +166,7 @@ class Screen:
         with self.render_lock:
           self.scr.clear()
           self.scr.refresh()
+          self.refresh.set()
         continue
       
       self.tabs[self.tab].on_key(c)
