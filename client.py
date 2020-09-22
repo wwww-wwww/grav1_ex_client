@@ -80,7 +80,9 @@ class Client:
             "encode_settings": json.dumps({
               "encoder_params": job.encoder_params,
               "ffmpeg_params": job.ffmpeg_params,
-              "passes": job.passes
+              "passes": job.passes,
+              "encoder": job.encoder,
+              "version": self.versions[job.encoder]
             })
           },
           files=files, timeout=5)
@@ -141,7 +143,7 @@ class Client:
     self.connect()
 
   def on_error(self, socket, message):
-    print(message)
+    logging.log(log.Levels.NET, message)
 
   def on_open(self, socket):
     logging.log(log.Levels.NET, "websocket opened")
