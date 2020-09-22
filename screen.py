@@ -1,4 +1,4 @@
-import curses, textwrap
+import curses, textwrap, logging, traceback
 from threading import Event, Lock, Thread
 
 KEY_TAB = ord("\t")
@@ -33,13 +33,20 @@ class WorkerTab(Tab):
 
   def header(self, cols):
     active_workers = len([worker for worker in self.client.workers.workers if worker.job != None])
-    return "Workers: {} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {}".format(
+
+    if self.client.segment_store.downloading:
+      downloading = "Downloading: {:.2f}%".format(self.client.segment_store.download_progress * 100)
+    else:
+      downloading = ""
+
+    return "Workers: {} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {} {}".format(
       self.client.workers.size(),
       active_workers,
       len(self.client.job_queue.queue),
       len(self.client.upload_queue.work_queue.queue) + len(self.client.upload_queue.working),
       self.client.hit,
-      self.client.miss
+      self.client.miss,
+      downloading
     )
 
   def render(self, cols, rows):
@@ -131,7 +138,8 @@ class Screen:
             self.scr.insstr(i, 0, line, curses.color_pair(1))
 
           self.scr.refresh()
-        except: pass
+        except:
+          logging.error(traceback.format_exc())
 
       self.refresh.clear()
 

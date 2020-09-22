@@ -57,6 +57,7 @@ class SegmentStore:
     self.lock = Lock()
     self.downloading = None
     self.download_executor = ThreadPoolExecutor(max_workers=1)
+    self.download_progress = 0
 
     self.stopping = False
 
@@ -66,6 +67,7 @@ class SegmentStore:
       with open(job.filename, "wb+") as file:
         downloaded = 0
         total_size = int(r.headers["content-length"])
+        self.download_progress = 0
         for chunk in r.iter_content(chunk_size=2**16):
           if self.stopping:
             if os.path.exists(job.filename):
@@ -73,6 +75,8 @@ class SegmentStore:
             return
           if chunk:
             downloaded += len(chunk)
+            self.client.refresh_screen("Workers")
+            self.download_progress = downloaded / total_size
             file.write(chunk)
       
       logging.log(log.Levels.NET, "finished downloading", job.filename)
