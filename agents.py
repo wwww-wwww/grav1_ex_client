@@ -63,7 +63,7 @@ class SegmentStore:
 
   def download(self, url, job):
     try:
-      r = self.client.session.get(url)
+      r = self.client.session.get(url, timeout=5)
       with open(job.filename, "wb+") as file:
         downloaded = 0
         total_size = int(r.headers["content-length"])
@@ -82,11 +82,14 @@ class SegmentStore:
       logging.log(log.Levels.NET, "finished downloading", job.filename)
       self.downloading = None
       self.client.job_queue.push(job)
-      self.client.push_job_state()
     except:
+      self.downloading = None
+      job.dispose()
       logging.error(traceback.format_exc())
       if os.path.exists(job.filename):
         os.remove(job.filename)
+    finally:
+      self.client.push_job_state()
 
   @synchronized
   def acquire(self, filename, url, job):

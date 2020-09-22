@@ -104,7 +104,10 @@ class Client:
         logging.error(traceback.format_exc())
 
   def _after_upload(self, job, output):
-    self.push_job_state()
+    try:
+      self.push_job_state()
+    except:
+      logging.error(traceback.format_exc())
 
   def connect(self):
     while True:
@@ -222,7 +225,10 @@ class Client:
       params = {
         "workers": self.workers.to_list()
       }
-      self.progress_channel.push("update_workers", params)
+      try:
+        self.progress_channel.push("update_workers", params)
+      except:
+        logging.error(traceback.format_exc())
 
   def push_job_state(self):
     uploading = None
@@ -237,7 +243,10 @@ class Client:
       "uploading": uploading
     }
 
-    self.channel.push("update", params)
+    try:
+      self.channel.push("update", params)
+    except:
+      logging.error(traceback.format_exc())
 
   def set_screen(self, screen):
     self.screen = screen
