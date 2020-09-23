@@ -1,13 +1,16 @@
 import logging
 from enum import IntEnum
 
+
 class Levels(IntEnum):
   NET = 21
+
 
 class LogMessage:
   def __init__(self, record, msg):
     self.record = record
     self.msg = msg
+
 
 class Logger(logging.Handler):
   def __init__(self):
@@ -37,7 +40,7 @@ class Logger(logging.Handler):
   def setup(self):
     for name, e in Levels.__members__.items():
       logging.addLevelName(e.value, name)
-    
+
     root = logging.getLogger()
     root.addHandler(self)
     root.setLevel(20)
