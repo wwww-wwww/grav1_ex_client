@@ -109,6 +109,11 @@ class Client:
 
   def _after_upload(self, resp, job, output):
     try:
+      if os.path.exists(output):
+        os.remove(output)
+    except:
+      logging.error(traceback.format_exc())
+    try:
       self.push_job_state()
     except:
       logging.error(traceback.format_exc())
