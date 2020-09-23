@@ -115,8 +115,8 @@ class ThreadPoolExecutor(_base.Executor):
       
       self.work_queue.queue.clear()
 
-      for work_item in new_queue:
-        self.work_queue.put(work_item)
+    for work_item in new_queue:
+      self.work_queue.put(work_item)
 
   def _adjust_thread_count(self):
     # if idle threads are available, don"t spin new threads

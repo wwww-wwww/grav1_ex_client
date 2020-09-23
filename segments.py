@@ -53,7 +53,6 @@ class SegmentStore:
       self.files[filename] += 1
       self.downloading = None
       self.client.workers.submit(self.client.work, self.client.after_work, job)
-      self.client.push_job_state()
     else:
       self.files[filename] = 1
       self.downloading = job.segment

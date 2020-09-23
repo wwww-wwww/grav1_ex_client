@@ -103,7 +103,7 @@ class Client:
       logging.error(traceback.format_exc())
     finally:
       try:
-        os.remove(output)
+        job.dispose()
       except:
         logging.error(traceback.format_exc())
 
@@ -264,6 +264,7 @@ class Client:
 
   def work(self, job):
     try:
+      self.refresh_screen("Workers")
       output = self.encode[job.encoder](job)
       if not job.pipe: return None
 
@@ -272,10 +273,14 @@ class Client:
 
       return output
     except:
-      logging.error(traceback.format_exc())
+      if job.stopped:
+        logging.info("cancelled job")
+      else:
+        logging.error(traceback.format_exc())
       return None
 
   def after_work(self, resp, job):
+    self.refresh_screen("Workers")
     if resp == None:
       job.dispose()
     else:

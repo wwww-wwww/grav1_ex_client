@@ -1,4 +1,4 @@
-import subprocess, re, os, logging
+import subprocess, re, os
 from util import print_progress
 
 
@@ -131,15 +131,13 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
       job.pipe.kill()
 
     if job.pipe.returncode != 0:
-      logging.error("\n".join(output))
-
       if os.path.exists(output_filename):
         try:
           os.remove(output_filename)
         except:
           pass
 
-      raise EncodingException()
+      raise EncodingException("\n".join(output))
 
   if os.path.isfile(log_path):
     try:
