@@ -24,6 +24,10 @@ class Job:
     self.disposed = False
 
   def dispose(self):
+    if self.pipe:
+      if self.pipe.poll() is None:
+        self.pipe.kill()
+
     if not self.disposed:
       self.disposed = True
       self.client.segment_store.release(self.filename)
@@ -38,8 +42,4 @@ class Job:
 
   def kill(self):
     self.stopped = True
-
-    if self.pipe and self.pipe.poll() is None:
-      self.pipe.kill()
-  
     self.dispose()
