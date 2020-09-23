@@ -310,8 +310,6 @@ class Client:
       "uploading": uploading
     }
 
-    logging.info(params)
-
     try:
       self.channel.push("update", params)
     except:
