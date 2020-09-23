@@ -1,14 +1,16 @@
 import subprocess, re, os, logging
 from util import print_progress
 
+
 class EncodingException(Exception):
   pass
 
-def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
+
+def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
   encoder_params = job.encoder_params
   ffmpeg_params = job.ffmpeg_params
 
-  #if encoder == "aomenc" and "vmaf" in encoder_params and len(worker.client.args.vmaf_path) > 0:
+  # if encoder == "aomenc" and "vmaf" in encoder_params and len(worker.client.args.vmaf_path) > 0:
   #  encoder_params += f" --vmaf-model-path={worker.client.args.vmaf_path}"
 
   vfs = [f"select=gte(n\\,{job.start})"]
@@ -26,13 +28,21 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
   log_path = "tmp{}.log".format(job.segment)
 
   ffmpeg = [
-    ffmpeg_path, "-y", "-hide_banner",
-    "-loglevel", "error",
-    "-i", job.filename,
-    "-strict", "-1",
-    "-pix_fmt", "yuv420p",
-    "-vf", vf,
-    "-vframes", job.frames
+    ffmpeg_path,
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    job.filename,
+    "-strict",
+    "-1",
+    "-pix_fmt",
+    "yuv420p10le",
+    "-vf",
+    vf,
+    "-vframes",
+    job.frames,
   ]
 
   ffmpeg.extend(ffmpeg_params)
@@ -44,9 +54,9 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
     encoder_path,
     "-",
     "--ivf",
-    f"--threads=8",
-    f"--passes={job.passes}"
     "--fpf={}".format(log_path),
+    "--threads=8",
+    f"--passes={job.passes}",
   ] + encoder_params
 
   aom = [str(s) for s in aom]
@@ -59,7 +69,7 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
   else:
     passes = aom + ["-o", output_filename]
 
-  #if job.grain_table:
+  # if job.grain_table:
   #  if not job.has_grain:
   #    return False, None
   #  else:
@@ -68,54 +78,73 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, worker, job):
   total_frames = job.frames
 
   for pass_n, cmd in enumerate(passes, start=1):
-    ffmpeg_pipe = subprocess.Popen(ffmpeg,
+    ffmpeg_pipe = subprocess.Popen(
+      ffmpeg,
       stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT)
+      stderr=subprocess.STDOUT,
+    )
 
-    worker.pipe = subprocess.Popen(cmd,
+    job.pipe = subprocess.Popen(
+      cmd,
       stdin=ffmpeg_pipe.stdout,
       stdout=subprocess.PIPE,
       stderr=subprocess.STDOUT,
-      universal_newlines=True)
+      universal_newlines=True,
+    )
 
-    worker.progress = (pass_n, 0)
-    worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(0, total_frames))
+    job.progress = (pass_n, 0)
+    job.update_status(
+      f"{encoder:.3s}",
+      "pass:",
+      pass_n,
+      print_progress(0, total_frames),
+    )
 
     output = []
     while True:
-      line = worker.pipe.stdout.readline().strip()
+      line = job.pipe.stdout.readline().strip()
 
-      if len(line) == 0 and worker.pipe.poll() is not None or worker.cancel_job or worker.stopped:
+      if len(line) == 0 and job.pipe.poll() is not None:
         break
-      
+
+      if job.stopped:
+        break
+
       output.append(line)
 
       match = re.search(r"frame.*?\/([^ ]+?) ", line)
       if match:
         frames = int(match.group(1))
-        worker.progress = (pass_n, frames)
-        worker.update_progress()
-        worker.update_status(f"{encoder:.3s}", "pass:", pass_n, print_progress(frames, total_frames))
+        job.progress = (pass_n, frames)
+        job.update_progress()
+        job.update_status(
+          f"{encoder:.3s}",
+          "pass:",
+          pass_n,
+          print_progress(frames, total_frames),
+        )
 
     if ffmpeg_pipe.poll() is None:
       ffmpeg_pipe.kill()
 
-    if worker.pipe.poll() is None:
-      worker.pipe.kill()
+    if job.pipe.poll() is None:
+      job.pipe.kill()
 
-    if worker.pipe.returncode != 0:
+    if job.pipe.returncode != 0:
       logging.error("\n".join(output))
 
       if os.path.exists(output_filename):
         try:
           os.remove(output_filename)
-        except: pass
+        except:
+          pass
 
       raise EncodingException()
 
   if os.path.isfile(log_path):
     try:
       os.remove(log_path)
-    except: pass
+    except:
+      pass
 
   return output_filename

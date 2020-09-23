@@ -2,7 +2,7 @@
 # https://github.com/python/cpython/blob/master/Lib/concurrent/futures/thread.py
 # with accessible work queue and working list
 
-import os, threading, itertools, weakref, types
+import os, threading, itertools, weakref, types, logging, traceback
 from concurrent.futures import _base
 from queue import Queue
 
@@ -13,38 +13,40 @@ _shutdown = False
 _global_shutdown_lock = threading.Lock()
 
 class _WorkItem(object):
-  def __init__(self, future, fn, fn2, args, kwargs):
-    self.future = future
+  def __init__(self, fn, fn2, args, kwargs):
     self.fn = fn
     self.fn2 = fn2
     self.args = args
     self.kwargs = kwargs
 
   def run(self):
-    if not self.future.set_running_or_notify_cancel():
-      return
-
     try:
-      result = self.fn(*self.args, **self.kwargs)
-    except BaseException as exc:
-      self.future.set_exception(exc)
-      # Break a reference cycle with the exception 'exc'
-      self = None
-    else:
-      self.future.set_result(result)
+      return self.fn(*self.args, **self.kwargs)
+    except:
+      logging.error(traceback.format_exc())
+      return None
 
-  def after(self):
-    self.fn2(*self.args, **self.kwargs)
+  def after(self, result):
+    try:
+      self.fn2(result, *self.args, **self.kwargs)
+    except:
+      logging.error(traceback.format_exc())
 
-def _worker(executor_reference, work_queue, working):
+def _worker(executor_reference, queue_lock, work_queue, working):
   try:
     while True:
-      work_item = work_queue.get(block=True)
+      work_item = work_queue.get()
+ 
       if work_item is not None:
-        working.append(work_item)
-        work_item.run()
-        working.remove(work_item)
-        work_item.after()
+        with queue_lock:
+          working.append(work_item)
+
+        result = work_item.run()
+
+        with queue_lock:
+          working.remove(work_item)
+
+        work_item.after(result)
 
         # Delete references to object. See issue16284
         del work_item
@@ -71,20 +73,18 @@ def _worker(executor_reference, work_queue, working):
         work_queue.put(None)
         return
       del executor
-  except BaseException:
-    _base.LOGGER.critical('Exception in worker', exc_info=True)
+  except:
+    logging.error(traceback.format_exc())
 
 class ThreadPoolExecutor(_base.Executor):
   _counter = itertools.count().__next__
 
-  def __init__(self, max_workers=None):
-    if max_workers is None:
-      max_workers = min(32, (os.cpu_count() or 1) + 4)
-
+  def __init__(self, max_workers):
     if max_workers <= 0:
       raise ValueError("max_workers must be greater than 0")
 
-    self._max_workers = max_workers
+    self.max_workers = max_workers
+    self.queue_lock = threading.Lock()
     self.work_queue = Queue()
     self.working = []
     self._idle_semaphore = threading.Semaphore(0)
@@ -95,21 +95,28 @@ class ThreadPoolExecutor(_base.Executor):
 
   def submit(self, fn, fn2, /, *args, **kwargs):
     with self._shutdown_lock, _global_shutdown_lock:
-
       if self._shutdown:
         raise RuntimeError("cannot schedule new futures after shutdown")
 
       if _shutdown:
         raise RuntimeError("cannot schedule new futures after interpreter shutdown")
 
-      f = _base.Future()
-      w = _WorkItem(f, fn, fn2, args, kwargs)
+      w = _WorkItem(fn, fn2, args, kwargs)
 
-      self.work_queue.put(w)
+      with self.queue_lock:
+        self.work_queue.put(w)
       self._adjust_thread_count()
-      return f
 
   submit.__doc__ = _base.Executor.submit.__doc__
+
+  def cancel(self, fn):
+    with self.work_queue.mutex:
+      new_queue = [work_item for work_item in list(self.work_queue.queue) if not fn(work_item)]
+      
+      self.work_queue.queue.clear()
+
+      for work_item in new_queue:
+        self.work_queue.put(work_item)
 
   def _adjust_thread_count(self):
     # if idle threads are available, don"t spin new threads
@@ -122,7 +129,7 @@ class ThreadPoolExecutor(_base.Executor):
       q.put(None)
 
     num_threads = len(self._threads)
-    if num_threads < self._max_workers:
+    if num_threads < self.max_workers:
       thread_name = "%s_%d" % (self._thread_name_prefix or self, num_threads)
 
       t = threading.Thread(
@@ -131,6 +138,7 @@ class ThreadPoolExecutor(_base.Executor):
         daemon=True,
         args=(
           weakref.ref(self, weakref_cb),
+          self.queue_lock,
           self.work_queue,
           self.working
         )
@@ -140,19 +148,9 @@ class ThreadPoolExecutor(_base.Executor):
       self._threads.add(t)
       _threads_queues[t] = self.work_queue
 
-  def shutdown(self, wait=True, *, cancel_futures=False):
+  def shutdown(self, wait=True):
     with self._shutdown_lock:
       self._shutdown = True
-      if cancel_futures:
-        # Drain all work items from the queue, and then cancel their
-        # associated futures.
-        while True:
-          try:
-            work_item = self.work_queue.get_nowait()
-          except queue.Empty:
-            break
-          if work_item is not None:
-            work_item.future.cancel()
 
       # Send a wake-up to prevent threads calling
       # work_queue.get(block=True) from permanently blocking.
