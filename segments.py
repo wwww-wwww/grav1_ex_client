@@ -27,7 +27,7 @@ class SegmentStore:
         total_size = int(r.headers["content-length"])
         self.download_progress = 0
         for chunk in r.iter_content(chunk_size=2**16):
-          if self.stopping:
+          if self.stopping or job.stopped:
             if os.path.exists(job.filename):
               os.remove(job.filename)
             return
@@ -47,6 +47,10 @@ class SegmentStore:
     finally:
       self.client.push_job_state()
 
+  @property
+  def segment(self):
+    return self.downloading.segment if self.downloading else None
+
   @synchronized
   def acquire(self, filename, url, job):
     if filename in self.files:
@@ -55,7 +59,7 @@ class SegmentStore:
       self.client.workers.submit(self.client.work, self.client.after_work, job)
     else:
       self.files[filename] = 1
-      self.downloading = job.segment
+      self.downloading = job
       logging.log(log.Levels.NET, "downloading", url)
       self.download_executor.submit(self.download, url, job)
 

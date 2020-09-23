@@ -166,7 +166,7 @@ class Client:
         "max_workers": self.workers.max_workers,
         "job_queue": job_queue,
         "upload_queue": upload_queue,
-        "downloading": self.segment_store.downloading,
+        "downloading": self.segment_store.segment,
         "uploading": uploading,
         "queue_size": self.queue_size
       },
@@ -201,7 +201,7 @@ class Client:
     job_queue, workers = self.get_job_queue()
 
     if segment_id in job_queue or \
-      segment_id == self.segment_store.downloading or \
+      segment_id == self.segment_store.segment or \
       segment_id in [job["segment"] for job in workers]:
       self.push_job_state()
       return
@@ -214,13 +214,16 @@ class Client:
       with self.workers.queue_lock:
         for job in list(self.workers.work_queue.queue):
           if job.args[0].segment in payload["segments"]:
-            job.args[0].kill()
+            job.args[0].dispose()
 
         for job in self.workers.working:
           if job.args[0].segment in payload["segments"]:
-            job.args[0].kill()
+            job.args[0].dispose()
 
         for segment in payload["segments"]:
+          if self.segment_store.segment == segment:
+            self.segment_store.downloading.dispose()
+
           self.workers.cancel(
             lambda work_item: work_item.args[0].segment == segment)
     except:
@@ -311,7 +314,7 @@ class Client:
       "workers": workers,
       "job_queue": job_queue,
       "upload_queue": upload_queue,
-      "downloading": self.segment_store.downloading,
+      "downloading": self.segment_store.segment,
       "uploading": uploading
     }
 

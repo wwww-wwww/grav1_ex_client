@@ -24,6 +24,8 @@ class Job:
     self.disposed = False
 
   def dispose(self):
+    self.stopped = True
+
     if self.pipe:
       if self.pipe.poll() is None:
         self.pipe.kill()
@@ -39,7 +41,3 @@ class Job:
     message = " ".join([str(arg) for arg in argv])
     self.status = message
     self.client.refresh_screen("Workers")
-
-  def kill(self):
-    self.stopped = True
-    self.dispose()
