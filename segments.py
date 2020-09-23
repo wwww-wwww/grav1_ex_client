@@ -7,6 +7,10 @@ from threading import Condition, Lock
 from collections import deque
 
 
+class DownloadCancelled(Exception):
+  pass
+
+
 class SegmentStore:
   def __init__(self, client):
     self.client = client
@@ -28,9 +32,8 @@ class SegmentStore:
         self.download_progress = 0
         for chunk in r.iter_content(chunk_size=2**16):
           if self.stopping or job.stopped:
-            if os.path.exists(job.filename):
-              os.remove(job.filename)
-            return
+            raise DownloadCancelled()
+
           if chunk:
             downloaded += len(chunk)
             self.client.refresh_screen("Workers")
