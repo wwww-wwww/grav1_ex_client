@@ -21,7 +21,14 @@ class SegmentStore:
     self.download_executor = ThreadPoolExecutor(max_workers=1)
     self.download_progress = 0
 
+    self.jobs = []
+
     self.stopping = False
+
+  def dispose(self):
+    self.stopping = True
+    for job in self.jobs:
+      job.dispose()
 
   def download(self, url, job):
     try:
@@ -56,6 +63,8 @@ class SegmentStore:
 
   @synchronized
   def acquire(self, filename, url, job):
+    self.jobs.append(job)
+
     if filename in self.files:
       self.files[filename] += 1
       self.downloading = None
@@ -69,13 +78,14 @@ class SegmentStore:
     self.client.push_job_state()
 
   @synchronized
-  def release(self, filename):
-    if filename in self.files:
-      if self.files[filename] == 1:
-        del self.files[filename]
+  def release(self, job):
+    self.jobs.remove(job)
+    if job.filename in self.files:
+      if self.files[job.filename] == 1:
+        del self.files[job.filename]
         try:
-          os.remove(filename)
+          os.remove(job.filename)
         except:
           pass
       else:
-        self.files[filename] -= 1
+        self.files[job.filename] -= 1

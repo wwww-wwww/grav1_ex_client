@@ -32,7 +32,7 @@ class Job:
 
     if not self.disposed:
       self.disposed = True
-      self.client.segment_store.release(self.filename)
+      self.client.segment_store.release(self)
 
   def update_progress(self):
     self.client.push_worker_progress()

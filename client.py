@@ -60,7 +60,7 @@ class Client:
     self.exit_event = Event()
 
   def stop(self):
-    #self.workers.stop()
+    self.segment_store.dispose()
     self.exit_event.set()
 
   def upload(self, job, output):
