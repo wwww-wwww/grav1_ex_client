@@ -272,6 +272,7 @@ class Client:
 
   def work(self, job):
     try:
+      self.push_job_state()
       self.refresh_screen("Workers")
       output = self.encode[job.encoder](job)
       if not job.pipe: return None
@@ -317,6 +318,7 @@ class Client:
 
     params = {
       "workers": workers,
+      "max_workers": self.workers.max_workers,
       "job_queue": job_queue,
       "upload_queue": upload_queue,
       "downloading": self.segment_store.segment,
