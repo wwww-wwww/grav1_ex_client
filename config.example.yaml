@@ -1,0 +1,13 @@
+name: 
+
+target: localhost:4000
+key: jtZLGswI0OV8AoEiZfCQItVwSz9XBu52
+
+workers: 4
+queue: 3
+
+threads: 8
+
+aomenc: aomenc
+vpxenc: vpxenc
+ffmpeg: ffmpeg

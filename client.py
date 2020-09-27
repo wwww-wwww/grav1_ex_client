@@ -20,7 +20,7 @@ import ratelimit
 
 
 class Client:
-  def __init__(self, target, key, name, max_workers, queue_size, paths):
+  def __init__(self, target, key, name, max_workers, queue_size, threads, paths):
     self.target = target
     self.ssl = False
     self.first_start = True
@@ -45,9 +45,9 @@ class Client:
 
     self.encode = {
       "aomenc":
-      lambda job: aom_vpx_encode("aom", paths["ffmpeg"], paths["aomenc"], job),
+      lambda job: aom_vpx_encode("aom", threads, paths["ffmpeg"], paths["aomenc"], job),
       "vpxenc":
-      lambda job: aom_vpx_encode("vpx", paths["ffmpeg"], paths["vpxenc"], job)
+      lambda job: aom_vpx_encode("vpx", threads, paths["ffmpeg"], paths["vpxenc"], job)
     }
 
     self.versions = {
@@ -342,32 +342,25 @@ if __name__ == "__main__":
   logger = log.Logger()
   logger.setup()
 
-  import argparse
+  from config import load_config
 
-  parser = argparse.ArgumentParser()
+  config = load_config()
 
-  parser.add_argument("target", type=str, nargs="?", default="localhost:4000")
-  parser.add_argument("--key", type=str, required=True, help="API key")
-  parser.add_argument("--workers", dest="workers", default=1)
-  parser.add_argument("--threads", dest="threads", default=8)
-  parser.add_argument("--queue", default=3)
-  parser.add_argument("--name", default=None, help="Name of the client")
-  parser.add_argument("--aomenc",
-                      default="aomenc",
-                      help="Path to aomenc (default: aomenc)")
-  parser.add_argument("--vpxenc",
-                      default="vpxenc",
-                      help="Path to vpxenc (default: vpxenc)")
-  parser.add_argument("--ffmpeg",
-                      default="ffmpeg",
-                      help="Path to ffmpeg (default: ffmpeg)")
+  paths = {
+    "aomenc": config.aomenc,
+    "vpxenc": config.vpxenc,
+    "ffmpeg": config.ffmpeg
+  }
 
-  args = parser.parse_args()
-
-  paths = {"aomenc": args.aomenc, "vpxenc": args.vpxenc, "ffmpeg": args.ffmpeg}
-
-  client = Client(args.target, args.key, args.name, int(args.workers),
-                  int(args.queue), paths)
+  client = Client(
+    config.target,
+    config.key,
+    config.name,
+    int(config.workers),
+    int(config.queue),
+    config.threads,
+    paths,
+  )
 
   client.connect()
   client.socket.after_connect()
