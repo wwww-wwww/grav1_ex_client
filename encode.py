@@ -6,14 +6,11 @@ class EncodingException(Exception):
   pass
 
 
-def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
+def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
   encoder_params = job.encoder_params
   ffmpeg_params = job.ffmpeg_params
 
-  # if encoder == "aomenc" and "vmaf" in encoder_params and len(worker.client.args.vmaf_path) > 0:
-  #  encoder_params += f" --vmaf-model-path={worker.client.args.vmaf_path}"
-
-  vfs = [f"select=gte(n\\,{job.start})"]
+  vfs = ["select=gte(n\\,{})".format(job.start)]
 
   if "-vf" in ffmpeg_params:
     idx = ffmpeg_params.index("-vf")
@@ -55,8 +52,8 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
     "-",
     "--ivf",
     "--fpf={}".format(log_path),
-    "--threads=8",
-    f"--passes={job.passes}",
+    "--threads={}".format(threads),
+    "--passes={}".format(job.passes),
   ] + encoder_params
 
   aom = [str(s) for s in aom]
@@ -94,7 +91,7 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
 
     job.progress = (pass_n, 0)
     job.update_status(
-      f"{encoder:.3s}",
+      "{:.3s}".format(encoder),
       "pass:",
       pass_n,
       print_progress(0, total_frames),
@@ -118,7 +115,7 @@ def aom_vpx_encode(encoder, ffmpeg_path, encoder_path, job):
         job.progress = (pass_n, frames)
         job.update_progress()
         job.update_status(
-          f"{encoder:.3s}",
+          "{:.3s}".format(encoder),
           "pass:",
           pass_n,
           print_progress(frames, total_frames),

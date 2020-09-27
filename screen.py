@@ -85,8 +85,8 @@ class LogTab(Tab):
 
   def header(self, cols):
     left = "Log"
-    right = f"{self.scroll}/{len(self.logger.messages)}"
-    return f"{left}{' ' * max(cols - len(left + right), 1)}{right}"
+    right = "{}/{}".format(self.scroll, len(self.logger.messages))
+    return "{}{}{}".format(left, ' ' * max(cols - len(left + right), 1), right)
 
   def render(self, cols, rows):
     text = [message.msg for message in self.logger.messages[-rows:]]
@@ -134,9 +134,11 @@ class Screen:
           footer = [line for line in textwrap.wrap(footer_text, width=mcols)]
 
           footer2 = " ".join(
-            [f"F{i} {t.name} " for i, t in enumerate(self.tabs, 1)])
+            ["F{} {} ".format(i, t.name) for i, t in enumerate(self.tabs, 1)])
           footer2_right = "F12 Quit"
-          footer2 = f"{footer2}{' ' * max(mcols - len(footer2 + footer2_right), 1)}{footer2_right}"
+          footer2 = "{}{}{}".format(
+            footer2, ' ' * max(mcols - len(footer2 + footer2_right), 1),
+            footer2_right)
           footer2 = [line for line in textwrap.wrap(footer2, width=mcols)]
 
           body = tab.render(mcols,
@@ -152,7 +154,7 @@ class Screen:
 
           for i, line in enumerate(footer,
                                    mlines - len(footer) - len(footer2)):
-            self.scr.insstr(i, 0, line, curses.color_pair(1))
+            self.scr.insstr(i, 0, line.ljust(mcols), curses.color_pair(1))
 
           for i, line in enumerate(footer2, mlines - len(footer2)):
             self.scr.insstr(i, 0, line, curses.color_pair(1))
