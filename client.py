@@ -234,6 +234,14 @@ class Client:
     except:
       logging.error(traceback.format_exc())
 
+  def add_worker(self):
+    self.workers.max_workers += 1
+    self.workers._adjust_thread_count()
+
+  def remove_worker(self):
+    self.workers.max_workers -= 1
+    self.workers._adjust_thread_count()
+
   def get_workers(self):
     with self.workers.queue_lock:
       return self._get_workers(self.workers.working)

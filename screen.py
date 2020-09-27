@@ -4,6 +4,8 @@ from threading import Event, Lock, Thread
 KEY_TAB = ord("\t")
 KEY_R = ord("R")
 
+menu_items = ["add", "remove", "kill"]
+
 
 class Tab:
   def __init__(self, screen, name):
@@ -31,6 +33,7 @@ class WorkerTab(Tab):
     super().__init__(screen, "Workers")
     self.client = client
     self.scroll = 0
+    self.menu_selection = 0
 
   def on_key(self, key):
     if key == curses.KEY_UP:
@@ -39,6 +42,16 @@ class WorkerTab(Tab):
     elif key == curses.KEY_DOWN:
       self.scroll += 1
       self.refresh()
+    elif key == curses.KEY_LEFT:
+      self.menu_selection = max(self.menu_selection - 1, 0)
+    elif key == curses.KEY_RIGHT:
+      self.menu_selection = min(self.menu_selection + 1, len(menu_items) - 1)
+    elif key == 10 or c == curses.KEY_ENTER:
+      menu_action = menu_items[self.menu_selection]
+      if menu_action == "add":
+        self.client.add_worker()
+      elif menu_action == "remove":
+        self.client.remove_worker()
 
   def header(self, cols):
     active_workers = len(self.client.workers.working)
@@ -55,6 +68,11 @@ class WorkerTab(Tab):
       len(self.client.upload_queue.work_queue.queue) +
       len(self.client.upload_queue.working), self.client.hit, self.client.miss,
       downloading)
+
+  def footer(self, cols):
+    footer = [("[{}]" if i == self.menu_selection else " {} ").format(item)
+              for i, item in enumerate(menu_items)]
+    return " ".join(footer)
 
   def render(self, cols, rows):
     body = []
