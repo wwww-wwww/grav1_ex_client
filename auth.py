@@ -24,7 +24,7 @@ def auth_pass(target, username, password):
 
 
 def auth(target, payload, ssl=True):
-  server = f"http{'s' if ssl else ''}://{target}/"
+  server = "http{}://{}/".format("s" if ssl else "", target)
   auth_url = urljoin(server, "api/auth")
   logging.log(Levels.NET, "authenticating with", auth_url)
 

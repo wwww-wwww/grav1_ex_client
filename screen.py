@@ -46,7 +46,7 @@ class WorkerTab(Tab):
       self.menu_selection = max(self.menu_selection - 1, 0)
     elif key == curses.KEY_RIGHT:
       self.menu_selection = min(self.menu_selection + 1, len(menu_items) - 1)
-    elif key == 10 or c == curses.KEY_ENTER:
+    elif key == 10 or key == curses.KEY_ENTER:
       menu_action = menu_items[self.menu_selection]
       if menu_action == "add":
         self.client.add_worker()

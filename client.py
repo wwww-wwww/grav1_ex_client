@@ -72,7 +72,8 @@ class Client:
       with open(output, "rb") as file:
         files = [("file", (output, file, "application/octet"))]
         url = urljoin(self.get_target_url(), "api/finish_segment")
-        logging.log(log.Levels.NET, "uploading {} to {}".format(job.segment, url))
+        logging.log(log.Levels.NET,
+                    "uploading {} to {}".format(job.segment, url))
 
         encode_settings = {
           "encoder_params": job.encoder_params,
@@ -137,7 +138,7 @@ class Client:
 
     logging.log(log.Levels.NET, "connecting to websocket")
 
-    socket_url = "ws{}://{}/websocket".format('s' if ssl else '', self.target)
+    socket_url = "ws{}://{}/websocket".format("s" if ssl else "", self.target)
     socket = Socket(socket_url, {"token": token})
     self.socket = socket
 
@@ -304,7 +305,7 @@ class Client:
       self.upload(job, resp)
 
   def get_target_url(self):
-    return "http{}://{}".format('s' if self.ssl else '', self.target)
+    return "http{}://{}".format("s" if self.ssl else "", self.target)
 
   def download(self, url, job):
     url = urljoin(self.get_target_url(), url)
