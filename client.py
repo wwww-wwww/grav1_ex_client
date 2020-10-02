@@ -252,6 +252,7 @@ class Client:
     for work_item in self.workers.working:
       job = work_item.args[0]
       worker = {
+        "project": job.project,
         "segment": job.segment,
         "progress_num": job.progress[1],
         "progress_den": job.frames,

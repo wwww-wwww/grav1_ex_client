@@ -32,11 +32,12 @@ class SegmentStore:
 
   def download(self, url, job):
     try:
+      self.download_progress = 0
+      self.client.refresh_screen("Workers")
       r = self.client.session.get(url, timeout=5)
       with open(job.filename, "wb+") as file:
         downloaded = 0
         total_size = int(r.headers["content-length"])
-        self.download_progress = 0
         for chunk in r.iter_content(chunk_size=2**16):
           if self.stopping or job.stopped:
             raise DownloadCancelled()

@@ -7,6 +7,7 @@ class Job:
     self.client = client
 
     self.segment = params["segment_id"]
+    self.project = params["project_id"]
     self.start = params["start"]
     self.frames = params["frames"]
     self.encoder = params["encoder"]
