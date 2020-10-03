@@ -34,17 +34,20 @@ class SegmentStore:
     try:
       self.download_progress = 0
       self.client.refresh_screen("Workers")
-      ext_url = urljoin(self.client.alt_dl_server, job.project, job.file)
-      r = self.client.session.get(ext_url, timeout=5)
-
-      if r.status_code != 200:
-        r = self.client.session.get(url, timeout=5)
+      if self.client.alt_dl_server is not None:
+        ext_url = urljoin(self.client.alt_dl_server, job.project, job.file)
+        r = self.client.session.get(ext_url, timeout=5)
 
         if r.status_code != 200:
-          raise DownloadCancelled()
+          r = self.client.session.get(url, timeout=5)
+        else:
+          logging.log(log.Levels.NET, "downloading from",
+                      self.client.alt_dl_server)
       else:
-        logging.log(log.Levels.NET, "downloading from",
-                    self.client.alt_dl_server)
+        r = self.client.session.get(url, timeout=5)
+
+      if r.status_code != 200:
+        raise DownloadCancelled()
 
       with open(job.filename, "wb+") as file:
         downloaded = 0
