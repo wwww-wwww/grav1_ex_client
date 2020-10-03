@@ -53,10 +53,7 @@ def load_config():
   args.add_argument("--workers", type=int, default=1)
   args.add_argument("--threads", type=int, default=8)
   args.add_argument("--queue", type=int, default=3)
-  args.add_argument("--name",
-                    type=str,
-                    default=None,
-                    help="Name of the client")
+  args.add_argument("--name", type=str, help="Name of the client")
   args.add_argument("--aomenc",
                     default="aomenc",
                     help="Path to aomenc (default: aomenc)")
@@ -66,6 +63,8 @@ def load_config():
   args.add_argument("--ffmpeg",
                     default="ffmpeg",
                     help="Path to ffmpeg (default: ffmpeg)")
+  args.add_argument("--alt-dl-server",
+                    help="Location to external download server")
 
   args.parse()
 

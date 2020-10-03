@@ -20,7 +20,8 @@ import ratelimit
 
 
 class Client:
-  def __init__(self, target, key, name, max_workers, queue_size, threads, paths):
+  def __init__(self, target, key, name, max_workers, queue_size, threads,
+               paths, alt_dl_server):
     self.target = target
     self.ssl = False
     self.first_start = True
@@ -45,15 +46,19 @@ class Client:
 
     self.encode = {
       "aomenc":
-      lambda job: aom_vpx_encode("aom", threads, paths["ffmpeg"], paths["aomenc"], job),
+      lambda job: aom_vpx_encode("aom", threads, paths["ffmpeg"], paths[
+        "aomenc"], job),
       "vpxenc":
-      lambda job: aom_vpx_encode("vpx", threads, paths["ffmpeg"], paths["vpxenc"], job)
+      lambda job: aom_vpx_encode("vpx", threads, paths["ffmpeg"], paths[
+        "vpxenc"], job)
     }
 
     self.versions = {
       "aomenc": get_version("aomenc", paths["aomenc"]),
       "vpxenc": get_version("vpxenc", paths["vpxenc"])
     }
+
+    self.alt_dl_server = alt_dl_server
 
     self.screen = None
 
@@ -114,6 +119,7 @@ class Client:
         os.remove(output)
     except:
       logging.error(traceback.format_exc())
+
     try:
       self.push_job_state()
     except:
@@ -370,6 +376,7 @@ if __name__ == "__main__":
     int(config.queue),
     config.threads,
     paths,
+    config.alt_dl_server,
   )
 
   client.connect()

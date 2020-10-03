@@ -8,6 +8,7 @@ class Job:
 
     self.segment = params["segment_id"]
     self.project = params["project_id"]
+    self.file = params["file"]
     self.start = params["start"]
     self.frames = params["frames"]
     self.encoder = params["encoder"]

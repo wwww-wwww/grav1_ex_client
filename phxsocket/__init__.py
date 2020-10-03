@@ -56,7 +56,6 @@ class Socket:
 
   def _on_message(self, ws, _message):
     message = decode(_message)
-    logging.info("socket", message)
 
     if message.event == ChannelEvents.reply.value and message.ref in self.messages:
       self.messages[message.ref].respond(message.payload)

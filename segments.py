@@ -1,5 +1,5 @@
 import os, logging, json, traceback
-from util import synchronized
+from util import synchronized, urljoin
 import logger as log
 
 from concurrent.futures import ThreadPoolExecutor
@@ -34,7 +34,18 @@ class SegmentStore:
     try:
       self.download_progress = 0
       self.client.refresh_screen("Workers")
-      r = self.client.session.get(url, timeout=5)
+      ext_url = urljoin(self.client.alt_dl_server, job.project, job.file)
+      r = self.client.session.get(ext_url, timeout=5)
+
+      if r.status_code != 200:
+        r = self.client.session.get(url, timeout=5)
+
+        if r.status_code != 200:
+          raise DownloadCancelled()
+      else:
+        logging.log(log.Levels.NET, "downloading from",
+                    self.client.alt_dl_server)
+
       with open(job.filename, "wb+") as file:
         downloaded = 0
         total_size = int(r.headers["content-length"])
@@ -49,14 +60,16 @@ class SegmentStore:
             file.write(chunk)
 
       logging.log(log.Levels.NET, "finished downloading", job.filename)
-      self.downloading = None
       self.client.workers.submit(self.client.work, self.client.after_work, job)
     except:
       logging.error(traceback.format_exc())
-      self.downloading = None
       job.dispose()
-    finally:
+
+    self.downloading = None
+    try:
       self.client.push_job_state()
+    except:
+      logging.error(traceback.format_exc())
 
   @property
   def segment(self):
