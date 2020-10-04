@@ -11,6 +11,10 @@ class DownloadCancelled(Exception):
   pass
 
 
+class LookupError(Exception):
+  pass
+
+
 class SegmentStore:
   def __init__(self, client):
     self.client = client
@@ -30,37 +34,46 @@ class SegmentStore:
     for job in self.jobs:
       job.dispose()
 
+  def save(self, r, job):
+    if r.status_code != 200:
+      raise DownloadCancelled()
+
+    with open(job.filename, "wb+") as file:
+      downloaded = 0
+      total_size = int(r.headers["content-length"])
+      for chunk in r.iter_content(chunk_size=2**16):
+        if self.stopping or job.stopped:
+          raise DownloadCancelled()
+
+        if chunk:
+          downloaded += len(chunk)
+          self.client.refresh_screen("Workers")
+          self.download_progress = downloaded / total_size
+          file.write(chunk)
+
   def download(self, url, job):
+    logging.log(log.Levels.NET, "downloading", job.filename)
+
     try:
       self.download_progress = 0
       self.client.refresh_screen("Workers")
-      if self.client.alt_dl_server is not None:
+      try:
+        if self.client.alt_dl_server is None:
+          raise LookupError()
+
         ext_url = urljoin(self.client.alt_dl_server, job.project, job.file)
-        r = self.client.session.get(ext_url, timeout=5)
+        with self.client.session.get(ext_url, timeout=5, stream=True) as r:
+          if r.status_code != 200:
+            raise LookupError()
+          else:
+            logging.log(log.Levels.NET, "downloading from",
+                        self.client.alt_dl_server)
+          self.save(r, job)
 
-        if r.status_code != 200:
-          r = self.client.session.get(url, timeout=5)
-        else:
-          logging.log(log.Levels.NET, "downloading from",
-                      self.client.alt_dl_server)
-      else:
-        r = self.client.session.get(url, timeout=5)
-
-      if r.status_code != 200:
-        raise DownloadCancelled()
-
-      with open(job.filename, "wb+") as file:
-        downloaded = 0
-        total_size = int(r.headers["content-length"])
-        for chunk in r.iter_content(chunk_size=2**16):
-          if self.stopping or job.stopped:
-            raise DownloadCancelled()
-
-          if chunk:
-            downloaded += len(chunk)
-            self.client.refresh_screen("Workers")
-            self.download_progress = downloaded / total_size
-            file.write(chunk)
+      except LookupError:
+        logging.log(log.Levels.NET, "downloading from", url)
+        with self.client.session.get(url, timeout=5, stream=True) as r:
+          self.save(r, job)
 
       logging.log(log.Levels.NET, "finished downloading", job.filename)
       self.client.workers.submit(self.client.work, self.client.after_work, job)
@@ -89,7 +102,6 @@ class SegmentStore:
     else:
       self.files[filename] = 1
       self.downloading = job
-      logging.log(log.Levels.NET, "downloading", url)
       self.download_executor.submit(self.download, url, job)
 
     self.client.push_job_state()
