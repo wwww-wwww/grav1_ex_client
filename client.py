@@ -67,7 +67,6 @@ class Client:
   def stop(self):
     self.segment_store.dispose()
     self.upload_queue.shutdown()
-    self.workers.shutdown()
     self.exit_event.set()
 
   def upload(self, job, output):
@@ -293,6 +292,9 @@ class Client:
 
   def work(self, job):
     try:
+      if job.stopped:
+        return None
+
       self.push_job_state()
       self.refresh_screen("Workers")
       output = self.encode[job.encoder](job)
