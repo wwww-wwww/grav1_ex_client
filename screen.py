@@ -64,8 +64,8 @@ class WorkerTab(Tab):
 
     return "Workers: {} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {} {}".format(
       self.client.workers.max_workers, active_workers,
-      len(self.client.workers.work_queue.queue),
-      len(self.client.upload_queue.work_queue.queue) +
+      len(self.client.workers.work_queue),
+      len(self.client.upload_queue.work_queue) +
       len(self.client.upload_queue.working), self.client.hit, self.client.miss,
       downloading)
 

@@ -66,10 +66,12 @@ class Client:
 
   def stop(self):
     self.segment_store.dispose()
+    self.upload_queue.shutdown()
+    self.workers.shutdown()
     self.exit_event.set()
 
   def upload(self, job, output):
-    self.upload_queue.submit(self._upload, self._after_upload, job, output)
+    self.upload_queue.submit(1, self._upload, self._after_upload, job, output)
     self.push_job_state()
 
   def _upload(self, job, output):
@@ -224,7 +226,7 @@ class Client:
   def on_cancel(self, payload):
     try:
       with self.workers.queue_lock:
-        for job in list(self.workers.work_queue.queue):
+        for job in list(self.workers.work_queue):
           if job.args[0].segment in payload["segments"]:
             job.args[0].dispose()
 
@@ -241,13 +243,16 @@ class Client:
     except:
       logging.error(traceback.format_exc())
 
-  def add_worker(self):
-    self.workers.max_workers += 1
+  def set_workers(self, n):
+    self.workers.max_workers = n
     self.workers._adjust_thread_count()
+    self.push_job_state()
+
+  def add_worker(self):
+    self.set_workers(self.workers.max_workers + 1)
 
   def remove_worker(self):
-    self.workers.max_workers -= 1
-    self.workers._adjust_thread_count()
+    self.set_workers(max(self.workers.max_workers - 1, 0))
 
   def get_workers(self):
     with self.workers.queue_lock:
@@ -270,7 +275,7 @@ class Client:
   def get_job_queue(self):
     with self.workers.queue_lock:
       worker_queue = [
-        job.args[0].segment for job in list(self.workers.work_queue.queue)
+        job.args[0].segment for job in list(self.workers.work_queue)
       ]
       working = self._get_workers(self.workers.working)
 
@@ -279,7 +284,7 @@ class Client:
   def get_upload_queue(self):
     with self.upload_queue.queue_lock:
       upload_queue = [
-        job.args[0].segment for job in list(self.upload_queue.work_queue.queue)
+        job.args[0].segment for job in list(self.upload_queue.work_queue)
       ]
       uploading = [
         work_item.args[0].segment for work_item in self.upload_queue.working

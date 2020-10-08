@@ -33,6 +33,7 @@ class SegmentStore:
     self.stopping = True
     for job in self.jobs:
       job.dispose()
+    self.download_executor.shutdown()
 
   def save(self, r, job):
     if r.status_code != 200:
@@ -61,13 +62,18 @@ class SegmentStore:
         if self.client.alt_dl_server is None:
           raise LookupError()
 
-        ext_url = urljoin(self.client.alt_dl_server, job.project, job.file)
+        ext_url = urljoin(
+          self.client.alt_dl_server,
+          job.project,
+          "split",
+          job.file,
+        )
+
         with self.client.session.get(ext_url, timeout=5, stream=True) as r:
           if r.status_code != 200:
             raise LookupError()
           else:
-            logging.log(log.Levels.NET, "downloading from",
-                        self.client.alt_dl_server)
+            logging.log(log.Levels.NET, "downloading from", ext_url)
           self.save(r, job)
 
       except LookupError:
@@ -76,7 +82,12 @@ class SegmentStore:
           self.save(r, job)
 
       logging.log(log.Levels.NET, "finished downloading", job.filename)
-      self.client.workers.submit(self.client.work, self.client.after_work, job)
+      self.client.workers.submit(
+        1,
+        self.client.work,
+        self.client.after_work,
+        job,
+      )
     except:
       logging.error(traceback.format_exc())
       job.dispose()
@@ -98,7 +109,8 @@ class SegmentStore:
     if filename in self.files:
       self.files[filename] += 1
       self.downloading = None
-      self.client.workers.submit(self.client.work, self.client.after_work, job)
+      self.client.workers.submit(1, self.client.work, self.client.after_work,
+                                 job)
     else:
       self.files[filename] = 1
       self.downloading = job
