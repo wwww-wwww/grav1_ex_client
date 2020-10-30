@@ -10,8 +10,7 @@ from executor import ThreadPoolExecutor
 
 from phxsocket import Socket
 from auth import auth_key, auth_pass, TimeoutException
-from worker import Job
-from segments import SegmentStore
+from segments import Job, SegmentStore
 
 from versions import get_version
 from encode import aom_vpx_encode

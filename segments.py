@@ -25,14 +25,14 @@ class SegmentStore:
     self.download_executor = ThreadPoolExecutor(max_workers=1)
     self.download_progress = 0
 
-    self.jobs = []
-
     self.stopping = False
 
   def dispose(self):
     self.stopping = True
-    for job in self.jobs:
+
+    for job in [job for f in self.files for job in self.files[f]]:
       job.dispose()
+
     self.download_executor.shutdown()
 
   def save(self, r, job):
@@ -95,8 +95,9 @@ class SegmentStore:
           job,
         )
     except:
-      logging.error(traceback.format_exc())
-      job.dispose()
+      if not job.stopped:
+        logging.error(traceback.format_exc())
+        job.dispose()
 
     with self.client.state_lock:
       self.downloading = None
@@ -112,10 +113,8 @@ class SegmentStore:
   @synchronized
   def acquire(self, filename, url, job):
     with self.client.state_lock:
-      self.jobs.append(job)
-
       if filename in self.files:
-        self.files[filename] += 1
+        self.files[filename].append(job)
         self.downloading = None
 
         self.client.workers.submit(
@@ -125,7 +124,7 @@ class SegmentStore:
           job,
         )
       else:
-        self.files[filename] = 1
+        self.files[filename] = [job]
         self.downloading = job
 
       self.download_executor.submit(self.download, url, job)
@@ -134,13 +133,56 @@ class SegmentStore:
 
   @synchronized
   def release(self, job):
-    self.jobs.remove(job)
     if job.filename in self.files:
-      if self.files[job.filename] == 1:
-        del self.files[job.filename]
-        try:
-          os.remove(job.filename)
-        except:
-          pass
-      else:
-        self.files[job.filename] -= 1
+      if job in self.files[job.filename]:
+        self.files[job.filename].remove(job)
+
+    if len(self.files[job.filename]) == 0:
+      del self.files[job.filename]
+      try:
+        os.remove(job.filename)
+      except:
+        pass
+
+
+class Job:
+  def __init__(self, client, params):
+    self.client = client
+
+    self.segment = params["segment_id"]
+    self.project = params["project_id"]
+    self.file = params["file"]
+    self.start = params["start"]
+    self.frames = params["frames"]
+    self.encoder = params["encoder"]
+    self.passes = params["passes"]
+    self.encoder_params = params["encoder_params"]
+    self.ffmpeg_params = params["ffmpeg_params"]
+    self.grain_table = params["grain_table"]
+    self.filename = "tmp{}".format(params["split_name"])
+
+    self.status = ""
+    self.pipe = None
+    self.progress = (0, 0)
+
+    self.stopped = False
+    self.disposed = False
+
+  def dispose(self):
+    self.stopped = True
+
+    if self.pipe:
+      if self.pipe.poll() is None:
+        self.pipe.kill()
+
+    if not self.disposed:
+      self.disposed = True
+      self.client.segment_store.release(self)
+
+  def update_progress(self):
+    self.client.push_worker_progress()
+
+  def update_status(self, *argv):
+    message = " ".join([str(arg) for arg in argv])
+    self.status = message
+    self.client.refresh_screen("Workers")

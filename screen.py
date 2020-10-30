@@ -48,10 +48,16 @@ class WorkerTab(Tab):
       self.menu_selection = min(self.menu_selection + 1, len(menu_items) - 1)
     elif key == 10 or key == curses.KEY_ENTER:
       menu_action = menu_items[self.menu_selection]
-      if menu_action == "add":
-        self.client.add_worker()
-      elif menu_action == "remove":
-        self.client.remove_worker()
+      self.__getattribute__(menu_action)()
+
+  def add(self):
+    self.client.add_worker()
+
+  def remove(self):
+    self.client.remove_worker()
+
+  def kill(self):
+    pass
 
   def header(self, cols):
     active_workers = len(self.client.workers.working)
@@ -232,7 +238,10 @@ class Screen:
 
     Thread(target=self.key_loop, args=(scr, ), daemon=True).start()
 
-    self.client.exit_event.wait()
+    try:
+      self.client.exit_event.wait()
+    except KeyboardInterrupt:
+      self.client.stop()
 
     curses.curs_set(1)
 
