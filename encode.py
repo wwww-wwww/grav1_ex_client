@@ -1,4 +1,4 @@
-import subprocess, re, os
+import subprocess, re, os, logging, traceback
 from util import print_progress
 
 
@@ -27,7 +27,6 @@ def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
   ffmpeg = [
     ffmpeg_path,
     "-y",
-    "-hide_banner",
     "-loglevel",
     "error",
     "-i",
@@ -97,34 +96,35 @@ def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
       print_progress(0, total_frames),
     )
 
-    output = []
-    while True:
-      line = job.pipe.stdout.readline().strip()
+    try:
+      output = []
+      while True:
+        line = job.pipe.stdout.readline().strip()
 
-      if len(line) == 0 and job.pipe.poll() is not None:
-        break
+        if len(line) == 0 and job.pipe.poll() is not None:
+          break
 
-      if job.stopped:
-        break
+        if job.stopped:
+          break
 
-      output.append(line)
+        if len(line) > 0:
+          output.append(line)
 
-      match = re.search(r"frame.*?\/([^ ]+?) ", line)
-      if match:
-        frames = int(match.group(1))
-        job.progress = (pass_n, frames)
-        job.update_progress()
-        job.update_status(
-          "{:.3s}".format(encoder),
-          "pass:",
-          pass_n,
-          print_progress(frames, total_frames),
-        )
-
-    if ffmpeg_pipe.poll() is None:
+          match = re.search(r"frame.*?\/([^ ]+?) ", line)
+          if match:
+            frames = int(match.group(1))
+            job.progress = (pass_n, frames)
+            job.update_progress()
+            job.update_status(
+              "{:.3s}".format(encoder),
+              "pass:",
+              pass_n,
+              print_progress(frames, total_frames),
+            )
+    except:
+      logging.error(traceback.format_exc())
+    finally:
       ffmpeg_pipe.kill()
-
-    if job.pipe.poll() is None:
       job.pipe.kill()
 
     if job.pipe.returncode != 0:

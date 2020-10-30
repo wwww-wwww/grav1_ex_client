@@ -52,47 +52,54 @@ class SegmentStore:
           self.download_progress = downloaded / total_size
           file.write(chunk)
 
+  def download_alt(self, url, job):
+    try:
+      if self.client.alt_dl_server is None:
+        raise LookupError()
+
+      ext_url = urljoin(
+        self.client.alt_dl_server,
+        job.project,
+        "split",
+        job.file,
+      )
+
+      with self.client.session.get(ext_url, timeout=5, stream=True) as r:
+        if r.status_code != 200:
+          raise LookupError()
+        else:
+          logging.log(log.Levels.NET, "downloading from", ext_url)
+        self.save(r, job)
+        return True
+
+    except LookupError:
+      return False
+
   def download(self, url, job):
     logging.log(log.Levels.NET, "downloading", job.filename)
 
     try:
       self.download_progress = 0
       self.client.refresh_screen("Workers")
-      try:
-        if self.client.alt_dl_server is None:
-          raise LookupError()
-
-        ext_url = urljoin(
-          self.client.alt_dl_server,
-          job.project,
-          "split",
-          job.file,
-        )
-
-        with self.client.session.get(ext_url, timeout=5, stream=True) as r:
-          if r.status_code != 200:
-            raise LookupError()
-          else:
-            logging.log(log.Levels.NET, "downloading from", ext_url)
-          self.save(r, job)
-
-      except LookupError:
+      if not self.download_alt(url, job):
         logging.log(log.Levels.NET, "downloading from", url)
         with self.client.session.get(url, timeout=5, stream=True) as r:
           self.save(r, job)
 
       logging.log(log.Levels.NET, "finished downloading", job.filename)
-      self.client.workers.submit(
-        1,
-        self.client.work,
-        self.client.after_work,
-        job,
-      )
+      with self.client.state_lock:
+        self.client.workers.submit(
+          1,
+          self.client.work,
+          self.client.after_work,
+          job,
+        )
     except:
       logging.error(traceback.format_exc())
       job.dispose()
 
-    self.downloading = None
+    with self.client.state_lock:
+      self.downloading = None
     try:
       self.client.push_job_state()
     except:
@@ -104,16 +111,23 @@ class SegmentStore:
 
   @synchronized
   def acquire(self, filename, url, job):
-    self.jobs.append(job)
+    with self.client.state_lock:
+      self.jobs.append(job)
 
-    if filename in self.files:
-      self.files[filename] += 1
-      self.downloading = None
-      self.client.workers.submit(1, self.client.work, self.client.after_work,
-                                 job)
-    else:
-      self.files[filename] = 1
-      self.downloading = job
+      if filename in self.files:
+        self.files[filename] += 1
+        self.downloading = None
+
+        self.client.workers.submit(
+          1,
+          self.client.work,
+          self.client.after_work,
+          job,
+        )
+      else:
+        self.files[filename] = 1
+        self.downloading = job
+
       self.download_executor.submit(self.download, url, job)
 
     self.client.push_job_state()

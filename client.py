@@ -4,7 +4,7 @@ import logger as log
 
 from urllib.parse import urljoin
 
-from threading import Event
+from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
@@ -35,6 +35,8 @@ class Client:
     self.queue_size = queue_size
     self.segment_store = SegmentStore(self)
     self.workers = ThreadPoolExecutor(max_workers)
+
+    self.state_lock = Lock()
 
     self.socket = None
     self.socket_id = None
@@ -336,22 +338,23 @@ class Client:
         logging.error(traceback.format_exc())
 
   def push_job_state(self):
-    upload_queue, uploading = self.get_upload_queue()
-    job_queue, workers = self.get_job_queue()
+    with self.state_lock:
+      upload_queue, uploading = self.get_upload_queue()
+      job_queue, workers = self.get_job_queue()
 
-    params = {
-      "workers": workers,
-      "max_workers": self.workers.max_workers,
-      "job_queue": job_queue,
-      "upload_queue": upload_queue,
-      "downloading": self.segment_store.segment,
-      "uploading": uploading
-    }
+      params = {
+        "workers": workers,
+        "max_workers": self.workers.max_workers,
+        "job_queue": job_queue,
+        "upload_queue": upload_queue,
+        "downloading": self.segment_store.segment,
+        "uploading": uploading
+      }
 
-    try:
-      self.channel.push("update", params)
-    except:
-      logging.error(traceback.format_exc())
+      try:
+        self.channel.push("update", params)
+      except:
+        logging.error(traceback.format_exc())
 
   def set_screen(self, screen):
     self.screen = screen
