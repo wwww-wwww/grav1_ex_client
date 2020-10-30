@@ -1,4 +1,4 @@
-import json, logging, os, sys, traceback
+import json, logging, os, sys, traceback, phxsocket
 from requests import Session
 import logger as log
 
@@ -8,7 +8,6 @@ from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
-from phxsocket import Socket
 from auth import auth_key, auth_pass, TimeoutException
 from segments import Job, SegmentStore
 
@@ -147,7 +146,7 @@ class Client:
     logging.log(log.Levels.NET, "connecting to websocket")
 
     socket_url = "ws{}://{}/websocket".format("s" if ssl else "", self.target)
-    socket = Socket(socket_url, {"token": token})
+    socket = phxsocket.Client(socket_url, {"token": token})
     self.socket = socket
 
     socket.on_open = self.on_open
