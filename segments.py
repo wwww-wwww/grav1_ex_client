@@ -105,23 +105,20 @@ class SegmentStore:
 
   @synchronized
   def acquire(self, job, url):
-    with self.client.state_lock:
-      if job.filename in self.files:
-        self.files[job.filename].append(job)
-        self.downloading = None
+    if job.filename in self.files:
+      self.files[job.filename].append(job)
+      self.downloading = None
 
-        self.client.workers.submit(
-          1,
-          self.client.work,
-          self.client.after_work,
-          job,
-        )
-      else:
-        self.files[job.filename] = [job]
-        self.downloading = job
-        self.download_executor.submit(self.download, url, job)
-
-    self.client.push_job_state()
+      self.client.workers.submit(
+        1,
+        self.client.work,
+        self.client.after_work,
+        job,
+      )
+    else:
+      self.files[job.filename] = [job]
+      self.downloading = job
+      self.download_executor.submit(self.download, url, job)
 
   @synchronized
   def release(self, job):

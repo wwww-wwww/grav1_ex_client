@@ -8,6 +8,7 @@ from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
+from websocket._exceptions import WebSocketConnectionClosedException
 from auth import auth_key, auth_pass, TimeoutError
 from segments import Job, SegmentStore
 
@@ -209,18 +210,20 @@ class Client:
     self.reconnect()
 
   def on_job(self, payload):
-    logging.log(log.Levels.NET, "received job")
-    segment_id = payload["segment_id"]
-    job_queue, workers = self.get_job_queue()
+    with self.state_lock:
+      segment_id = payload["segment_id"]
+      job_queue, workers = self.get_job_queue()
 
-    if segment_id in job_queue or \
-      segment_id == self.segment_store.segment or \
-      segment_id in [job["segment"] for job in workers]:
-      self.push_job_state()
-      return
+      if segment_id in job_queue or \
+        self.segment_store.downloading or \
+        segment_id in [job["segment"] for job in workers]:
+        self._push_job_state()
+        return
 
-    self.channel.push("recv_segment", {"downloading": segment_id})
-    self.download(payload["url"], Job(self, payload))
+      logging.log(log.Levels.NET, "received job", str(payload))
+      self.channel.push("recv_segment", {"downloading": segment_id})
+      self.download(payload["url"], Job(self, payload))
+      self._push_job_state()
 
   def on_cancel(self, payload):
     try:
@@ -330,27 +333,34 @@ class Client:
       try:
         self.progress_channel.push("update_workers",
                                    {"workers": self.get_workers()})
+      except WebSocketConnectionClosedException:
+        pass
       except:
         logging.error(traceback.format_exc())
+
+  def _push_job_state(self):
+    upload_queue, uploading = self.get_upload_queue()
+    job_queue, workers = self.get_job_queue()
+
+    params = {
+      "workers": workers,
+      "max_workers": self.workers.max_workers,
+      "job_queue": job_queue,
+      "upload_queue": upload_queue,
+      "downloading": self.segment_store.segment,
+      "uploading": uploading
+    }
+
+    try:
+      self.channel.push("update", params)
+    except WebSocketConnectionClosedException:
+      pass
+    except:
+      logging.error(traceback.format_exc())
 
   def push_job_state(self):
     with self.state_lock:
-      upload_queue, uploading = self.get_upload_queue()
-      job_queue, workers = self.get_job_queue()
-
-      params = {
-        "workers": workers,
-        "max_workers": self.workers.max_workers,
-        "job_queue": job_queue,
-        "upload_queue": upload_queue,
-        "downloading": self.segment_store.segment,
-        "uploading": uploading
-      }
-
-      try:
-        self.channel.push("update", params)
-      except:
-        logging.error(traceback.format_exc())
+      self._push_job_state()
 
   def set_screen(self, screen):
     self.screen = screen
