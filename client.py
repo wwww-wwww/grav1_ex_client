@@ -8,7 +8,7 @@ from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
-from auth import auth_key, auth_pass, TimeoutException
+from auth import auth_key, auth_pass, TimeoutError
 from segments import Job, SegmentStore
 
 from versions import get_version
@@ -131,7 +131,7 @@ class Client:
       try:
         self._connect()
         return
-      except TimeoutException as e:
+      except TimeoutError as e:
         if self.first_start:
           raise e
         logging.log(log.Levels.NET, "timed out, trying again.")
@@ -300,9 +300,6 @@ class Client:
       output = self.encode[job.encoder](job)
       if not job.pipe: return None
 
-      if job.pipe.poll() is None:
-        job.pipe.kill()
-
       return output
     except:
       if job.stopped:
@@ -313,21 +310,22 @@ class Client:
 
   def after_work(self, resp, job):
     self.refresh_screen("Workers")
-    if resp == None:
-      job.dispose()
-    else:
+    if resp:
       self.upload(job, resp)
+    else:
+      job.dispose()
 
   def get_target_url(self):
     return "http{}://{}".format("s" if self.ssl else "", self.target)
 
   def download(self, url, job):
     url = urljoin(self.get_target_url(), url)
-    self.segment_store.acquire(job.filename, url, job)
+    self.segment_store.acquire(job, url)
 
   def push_worker_progress(self):
     if not self.progress_channel:
       return
+
     if ratelimit.can_execute("worker_progress", 1):
       try:
         self.progress_channel.push("update_workers",

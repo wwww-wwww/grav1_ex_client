@@ -1,4 +1,4 @@
-import logging
+import logging, traceback
 from requests import Session
 from requests.exceptions import SSLError
 from urllib.parse import urljoin
@@ -7,11 +7,11 @@ from logger import Levels
 session = Session()
 
 
-class AuthException(Exception):
+class AuthError(Exception):
   pass
 
 
-class TimeoutException(Exception):
+class TimeoutError(Exception):
   pass
 
 
@@ -32,14 +32,14 @@ def auth(target, payload, ssl=True):
     r = session.post(auth_url, json=payload, timeout=5)
   except SSLError:
     return auth(target, payload, False)
-  except Exception as e:
-    raise TimeoutException()
 
-  resp = r.json()
-  if "success" in resp:
+  try:
+    resp = r.json()
     if resp["success"]:
       return ssl, resp["token"]
     else:
-      raise AuthException(resp["reason"])
-  else:
-    raise AuthException("bad protocol")
+      raise AuthError(resp["reason"])
+  except AuthError as e:
+    raise e
+  except:
+    raise AuthError("bad protocol", traceback.format_exc())

@@ -40,18 +40,8 @@ def _worker(executor_reference, tpe):
     while True:
       with tpe.get_job() as work_item:
         if work_item is not None:
-          with tpe.queue_lock:
-            tpe.working.append(work_item)
-
           result = work_item.run()
-
-          with tpe.queue_lock:
-            tpe.working.remove(work_item)
-
           work_item.after(result)
-
-          # Delete references to object. See issue16284
-          del work_item
 
           # attempt to increment idle count
           executor = executor_reference()
@@ -83,9 +73,6 @@ class ThreadPoolExecutor(_base.Executor):
   _counter = itertools.count().__next__
 
   def __init__(self, max_workers):
-    if max_workers <= 0:
-      raise ValueError("max_workers must be greater than 0")
-
     self.queue_lock = threading.Lock()
     self.work_queue = deque()
     self.working = []
@@ -166,6 +153,7 @@ class ThreadPoolExecutor(_base.Executor):
       with self.queue_lock:
         if self.work_queue[0] == front:
           self.work_queue.popleft()
+          self.working.append(front)
         else:
           # V if it was hanging onto an item that has already been removed
           # either from another process or cancel()
@@ -173,9 +161,12 @@ class ThreadPoolExecutor(_base.Executor):
           yield None
           return
 
-    yield front
-
-    self._release(front.weight)
+    try:
+      yield front
+    finally:
+      self.working.remove(front)
+      self._release(front.weight)
+      del front
 
   def cancel(self, fn):
     with self.queue_lock:

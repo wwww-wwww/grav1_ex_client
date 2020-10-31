@@ -11,10 +11,6 @@ class DownloadCancelled(Exception):
   pass
 
 
-class LookupError(Exception):
-  pass
-
-
 class SegmentStore:
   def __init__(self, client):
     self.client = client
@@ -53,27 +49,23 @@ class SegmentStore:
           file.write(chunk)
 
   def download_alt(self, url, job):
-    try:
-      if self.client.alt_dl_server is None:
-        raise LookupError()
-
-      ext_url = urljoin(
-        self.client.alt_dl_server,
-        job.project,
-        "split",
-        job.file,
-      )
-
-      with self.client.session.get(ext_url, timeout=5, stream=True) as r:
-        if r.status_code != 200:
-          raise LookupError()
-        else:
-          logging.log(log.Levels.NET, "downloading from", ext_url)
-        self.save(r, job)
-        return True
-
-    except LookupError:
+    if self.client.alt_dl_server is None:
       return False
+
+    ext_url = urljoin(
+      self.client.alt_dl_server,
+      job.project,
+      "split",
+      job.file,
+    )
+
+    with self.client.session.get(ext_url, timeout=5, stream=True) as r:
+      if r.status_code != 200:
+        return False
+      else:
+        logging.log(log.Levels.NET, "downloading from", ext_url)
+      self.save(r, job)
+      return True
 
   def download(self, url, job):
     logging.log(log.Levels.NET, "downloading", job.filename)
@@ -101,6 +93,7 @@ class SegmentStore:
 
     with self.client.state_lock:
       self.downloading = None
+
     try:
       self.client.push_job_state()
     except:
@@ -111,10 +104,10 @@ class SegmentStore:
     return self.downloading.segment if self.downloading else None
 
   @synchronized
-  def acquire(self, filename, url, job):
+  def acquire(self, job, url):
     with self.client.state_lock:
-      if filename in self.files:
-        self.files[filename].append(job)
+      if job.filename in self.files:
+        self.files[job.filename].append(job)
         self.downloading = None
 
         self.client.workers.submit(
@@ -124,10 +117,9 @@ class SegmentStore:
           job,
         )
       else:
-        self.files[filename] = [job]
+        self.files[job.filename] = [job]
         self.downloading = job
-
-      self.download_executor.submit(self.download, url, job)
+        self.download_executor.submit(self.download, url, job)
 
     self.client.push_job_state()
 

@@ -2,7 +2,11 @@ import subprocess, re, os, logging, traceback
 from util import print_progress
 
 
-class EncodingException(Exception):
+class JobStopped(Exception):
+  pass
+
+
+class EncodingError(Exception):
   pass
 
 
@@ -73,30 +77,32 @@ def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
 
   total_frames = job.frames
 
-  for pass_n, cmd in enumerate(passes, start=1):
-    ffmpeg_pipe = subprocess.Popen(
-      ffmpeg,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-    )
+  ffmpeg_pipe = None
 
-    job.pipe = subprocess.Popen(
-      cmd,
-      stdin=ffmpeg_pipe.stdout,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-      universal_newlines=True,
-    )
+  try:
+    for pass_n, cmd in enumerate(passes, start=1):
+      ffmpeg_pipe = subprocess.Popen(
+        ffmpeg,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+      )
 
-    job.progress = (pass_n, 0)
-    job.update_status(
-      "{:.3s}".format(encoder),
-      "pass:",
-      pass_n,
-      print_progress(0, total_frames),
-    )
+      job.pipe = subprocess.Popen(
+        cmd,
+        stdin=ffmpeg_pipe.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+      )
 
-    try:
+      job.progress = (pass_n, 0)
+      job.update_status(
+        "{:.3s}".format(encoder),
+        "pass:",
+        pass_n,
+        print_progress(0, total_frames),
+      )
+
       output = []
       while True:
         line = job.pipe.stdout.readline().strip()
@@ -105,7 +111,7 @@ def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
           break
 
         if job.stopped:
-          break
+          raise JobStopped
 
         if len(line) > 0:
           output.append(line)
@@ -121,25 +127,31 @@ def aom_vpx_encode(encoder, threads, ffmpeg_path, encoder_path, job):
               pass_n,
               print_progress(frames, total_frames),
             )
-    except:
-      logging.error(traceback.format_exc())
-    finally:
+
+      if job.pipe.returncode != 0:
+        if os.path.exists(output_filename):
+          try:
+            os.remove(output_filename)
+          except:
+            pass
+
+        raise EncodingError("\n".join(output))
+
+  except JobStopped:
+    logging.info("Job stopped")
+    return None
+  except:
+    logging.error(traceback.format_exc())
+    return None
+  finally:
+    if ffmpeg_pipe:
       ffmpeg_pipe.kill()
-      job.pipe.kill()
+    job.pipe.kill()
 
-    if job.pipe.returncode != 0:
-      if os.path.exists(output_filename):
-        try:
-          os.remove(output_filename)
-        except:
-          pass
-
-      raise EncodingException("\n".join(output))
-
-  if os.path.isfile(log_path):
-    try:
-      os.remove(log_path)
-    except:
-      pass
+    if os.path.isfile(log_path):
+      try:
+        os.remove(log_path)
+      except:
+        pass
 
   return output_filename
