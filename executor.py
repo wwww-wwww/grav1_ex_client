@@ -169,11 +169,10 @@ class ThreadPoolExecutor(_base.Executor):
       del front
 
   def cancel(self, fn):
-    with self.queue_lock:
-      new_queue = [work_item for work_item in list(self.work_queue) if not fn(work_item)]
-      
-      self.work_queue.clear()
-      self.work_queue.extend(new_queue)
+    new_queue = [work_item for work_item in list(self.work_queue) if not fn(work_item)]
+    
+    self.work_queue.clear()
+    self.work_queue.extend(new_queue)
     
     with self._cv:
       self._cv.notify_all()
