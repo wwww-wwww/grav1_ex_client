@@ -71,7 +71,11 @@ class Client:
     self.exit_event.set()
 
   def upload(self, job, output):
-    self.upload_queue.submit(1, self._upload, self._after_upload, job, output)
+    self.upload_queue.submit(
+      self._upload,
+      [job, output],
+      after_remove=self._after_upload,
+    )
     self.push_job_state()
 
   def _upload(self, job, output):
@@ -121,11 +125,8 @@ class Client:
         os.remove(output)
     except:
       logging.error(traceback.format_exc())
-
-    try:
+    finally:
       self.push_job_state()
-    except:
-      logging.error(traceback.format_exc())
 
   def connect(self):
     while True:
@@ -187,10 +188,10 @@ class Client:
       "versions": self.versions
     }
 
-    if self.name is not None:
+    if self.name:
       params["state"]["name"] = self.name
 
-    if self.socket_id is not None:
+    if self.socket_id:
       params["id"] = self.socket_id
 
     self.channel = socket.channel("worker", params)
@@ -242,10 +243,10 @@ class Client:
 
           self.workers.cancel(
             lambda work_item: work_item.args[0].segment == segment)
-
-      self.push_job_state()
     except:
       logging.error(traceback.format_exc())
+    finally:
+      self.push_job_state()
 
   def set_workers(self, n):
     self.workers.max_workers = n
@@ -390,8 +391,8 @@ if __name__ == "__main__":
     config.target,
     config.key,
     config.name,
-    int(config.workers),
-    int(config.queue),
+    config.workers,
+    config.queue,
     config.threads,
     paths,
     config.alt_dl_server,

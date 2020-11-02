@@ -8,7 +8,7 @@ class Args(dict):
     self._default_args = {}
 
   def add_argument(self, *args, default=None, default2=None, **kwargs):
-    if default != None:
+    if default is not None:
       self._default_args[args[0]] = default
     self._parser.add_argument(*args, default=default2, **kwargs)
 

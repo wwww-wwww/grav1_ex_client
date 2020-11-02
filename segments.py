@@ -81,10 +81,10 @@ class SegmentStore:
       logging.log(log.Levels.NET, "finished downloading", job.filename)
       with self.client.state_lock:
         self.client.workers.submit(
-          1,
           self.client.work,
-          self.client.after_work,
-          job,
+          [job],
+          weight=1,
+          after=self.client.after_work,
         )
     except:
       if not job.stopped:
@@ -94,10 +94,7 @@ class SegmentStore:
     with self.client.state_lock:
       self.downloading = None
 
-    try:
-      self.client.push_job_state()
-    except:
-      logging.error(traceback.format_exc())
+    self.client.push_job_state()
 
   @property
   def segment(self):
@@ -110,10 +107,10 @@ class SegmentStore:
       self.downloading = None
 
       self.client.workers.submit(
-        1,
         self.client.work,
-        self.client.after_work,
-        job,
+        [job],
+        weight=1,
+        after=self.client.after_work,
       )
     else:
       self.files[job.filename] = [job]

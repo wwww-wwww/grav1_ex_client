@@ -13,13 +13,16 @@ _shutdown = False
 # shutting down. Must be held while mutating _threads_queues and _shutdown.
 _global_shutdown_lock = threading.Lock()
 
+
 class _WorkItem(object):
-  def __init__(self, weight, fn, fn2, args, kwargs):
+  def __init__(self, weight, fn, args, kwargs, after, after_remove):
     self.weight = weight
     self.fn = fn
-    self.fn2 = fn2
+    self._after = after
+    self._after_remove = after_remove
     self.args = args
     self.kwargs = kwargs
+    self.result = None
 
   def run(self):
     try:
@@ -29,17 +32,26 @@ class _WorkItem(object):
       return None
 
   def after(self, result):
+    self.result = result
     try:
-      if self.fn2 != None:
-        self.fn2(result, *self.args, **self.kwargs)
+      if self._after:
+        self._after(result, *self.args, **self.kwargs)
     except:
       logging.error(traceback.format_exc())
 
+  def after_remove(self):
+    try:
+      if self._after_remove:
+        self._after_remove(self.result, *self.args, **self.kwargs)
+    except:
+      logging.error(traceback.format_exc())
+
+
 def _worker(executor_reference, tpe):
-  try:
-    while True:
+  while True:
+    try:
       with tpe.get_job() as work_item:
-        if work_item is not None:
+        if work_item:
           result = work_item.run()
           work_item.after(result)
 
@@ -66,8 +78,9 @@ def _worker(executor_reference, tpe):
             tpe._work_queue_not_empty.notify()
           return
         del executor
-  except:
-    logging.error(traceback.format_exc())
+    except:
+      logging.error(traceback.format_exc())
+
 
 class ThreadPoolExecutor(_base.Executor):
   _counter = itertools.count().__next__
@@ -90,15 +103,22 @@ class ThreadPoolExecutor(_base.Executor):
 
     self._shutdown_lock = threading.Lock()
 
-  def submit(self, weight, fn, fn2, /, *args, **kwargs):
+  def submit(self,
+             fn,
+             args=[],
+             kwargs={},
+             weight=1,
+             after=None,
+             after_remove=None):
     with self._shutdown_lock, _global_shutdown_lock:
       if self._shutdown:
         raise RuntimeError("cannot schedule new futures after shutdown")
 
       if _shutdown:
-        raise RuntimeError("cannot schedule new futures after interpreter shutdown")
+        raise RuntimeError(
+          "cannot schedule new futures after interpreter shutdown")
 
-      w = _WorkItem(weight, fn, fn2, args, kwargs)
+      w = _WorkItem(weight, fn, args, kwargs, after, after_remove)
 
       with self.queue_lock:
         with self._work_queue_not_empty:
@@ -111,7 +131,7 @@ class ThreadPoolExecutor(_base.Executor):
 
   def _acquire(self, weight):
     with self._semaphore:
-      if self._value + weight <= self.max_workers:
+      if self._value + weight <= self.max_workers or self._value == 0:
         self._value += weight
         return True
       else:
@@ -137,7 +157,7 @@ class ThreadPoolExecutor(_base.Executor):
     with self._work_queue_not_empty:
       while len(self.work_queue) == 0:
         self._work_queue_not_empty.wait()
-      
+
     with self.queue_lock:
       if len(self.work_queue) == 0:
         yield None
@@ -149,7 +169,7 @@ class ThreadPoolExecutor(_base.Executor):
       if not acquired:
         yield None
         return
-      
+
       with self.queue_lock:
         if self.work_queue[0] == front:
           self.work_queue.popleft()
@@ -164,19 +184,22 @@ class ThreadPoolExecutor(_base.Executor):
     try:
       yield front
     finally:
+      front.after_remove()
       self.working.remove(front)
       self._release(front.weight)
       del front
 
   def cancel(self, fn):
-    new_queue = [work_item for work_item in list(self.work_queue) if not fn(work_item)]
-    
+    new_queue = [
+      work_item for work_item in list(self.work_queue) if not fn(work_item)
+    ]
+
     self.work_queue.clear()
     self.work_queue.extend(new_queue)
-    
+
     with self._cv:
       self._cv.notify_all()
-    
+
     with self._work_queue_not_empty:
       self._work_queue_not_empty.notify_all()
 
@@ -199,7 +222,7 @@ class ThreadPoolExecutor(_base.Executor):
         name=thread_name,
         target=_worker,
         daemon=True,
-        args=(weakref.ref(self, weakref_cb), self)
+        args=(weakref.ref(self, weakref_cb), self),
       )
 
       t.start()
