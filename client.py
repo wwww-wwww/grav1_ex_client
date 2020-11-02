@@ -242,6 +242,8 @@ class Client:
 
           self.workers.cancel(
             lambda work_item: work_item.args[0].segment == segment)
+
+      self.push_job_state()
     except:
       logging.error(traceback.format_exc())
 
