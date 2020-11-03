@@ -180,9 +180,14 @@ class Client:
           encoders = e.args[0]["data"]
           logging.error(e.args[0]["reason"], encoders)
 
-          if updater.update_encoders(self.target, self.ssl, encoders):
-            for encoder in encoders:
-              self.versions[encoder] = get_version(encoder, paths[encoder])
+          if updater.update_encoders(self.get_target_url(), encoders):
+            for enc in encoders:
+              self.versions[enc] = get_version(enc, self.paths[enc])
+
+            with self.workers.queue_lock:
+              for job in self.workers.working:
+                job.args[0].dispose()
+
             self.connect(fail_after=True)
           else:
             logging.info("Unable to download binaries from target server")
@@ -284,6 +289,9 @@ class Client:
     finally:
       self.push_job_state()
 
+  def on_set_workers(self, payload):
+    self.set_workers(payload["n"])
+
   def set_workers(self, n):
     self.workers.max_workers = n
     self.workers._adjust_thread_count()
@@ -357,6 +365,9 @@ class Client:
     else:
       job.dispose()
 
+  def after_work_remove(self, resp, job):
+    self.push_job_state()
+
   def get_target_url(self):
     return "http{}://{}".format("s" if self.ssl else "", self.target)
 
@@ -377,6 +388,10 @@ class Client:
       except:
         logging.error(traceback.format_exc())
 
+  def push_job_state(self):
+    with self.state_lock:
+      self._push_job_state()
+
   def _push_job_state(self):
     upload_queue, uploading = self.get_upload_queue()
     job_queue, workers = self.get_job_queue()
@@ -396,10 +411,6 @@ class Client:
       pass
     except:
       logging.error(traceback.format_exc())
-
-  def push_job_state(self):
-    with self.state_lock:
-      self._push_job_state()
 
   def set_screen(self, screen):
     self.screen = screen

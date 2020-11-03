@@ -85,6 +85,7 @@ class SegmentStore:
           [job],
           weight=1,
           after=self.client.after_work,
+          after_remove=self.client.after_work_remove,
         )
     except:
       if not job.stopped:
@@ -111,6 +112,7 @@ class SegmentStore:
         [job],
         weight=1,
         after=self.client.after_work,
+        after_remove=self.client.after_work_remove,
       )
     else:
       self.files[job.filename] = [job]

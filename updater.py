@@ -1,20 +1,20 @@
-import logging, requests, sys, traceback, urllib.parse
+import logging, requests, sys, traceback
+from urllib.parse import urljoin
 
 
 class BinariesNotFoundError(Exception):
   pass
 
 
-def update_encoders(target, ssl, encoders):
-  ssl = "s" if ssl else ""
+def update_encoders(target, encoders):
   platform = sys.platform
+  base_url = urljoin(target, "bin/{}/".format(sys.platform))
 
   for encoder in encoders:
     if platform == "win32":
       encoder += ".exe"
 
-    base_url = "http{}://{}/bin/{}/".format(ssl, target, sys.platform)
-    url = urllib.parse.urljoin(base_url, encoder)
+    url = urljoin(base_url, encoder)
     logging.info("Downloading", url)
 
     try:
