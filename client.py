@@ -1,4 +1,4 @@
-import json, logging, os, sys, traceback, phxsocket
+import json, logging, os, sys, shutil, traceback, phxsocket
 from requests import Session
 import logger as log
 
@@ -15,7 +15,7 @@ from segments import Job, SegmentStore
 from versions import get_version
 from encode import aom_vpx_encode
 
-import ratelimit
+import ratelimit, updater
 
 
 class Client:
@@ -387,6 +387,13 @@ if __name__ == "__main__":
     "ffmpeg": config.ffmpeg
   }
 
+  for path in paths:
+    if paths[path] == path and path != "ffmpeg":
+      continue
+    elif not shutil.which(paths[path]):
+      logging.error(path, "not found at", paths[path])
+      exit(1)
+
   client = Client(
     config.target,
     config.key,
@@ -399,7 +406,26 @@ if __name__ == "__main__":
   )
 
   client.connect()
-  client.socket.after_connect()
+
+  try:
+    client.socket.after_connect()
+  except phxsocket.channel.ChannelConnectError as e:
+    if "reason" in e.args[0]:
+      if e.args[0]["reason"] in ["bad versions", "missing encoders"]:
+        encoders = e.args[0]["data"]
+        logging.error(e.args[0]["reason"], encoders)
+
+        if updater.update_encoders(client.target, client.ssl, encoders):
+          for encoder in encoders:
+            client.versions[encoder] = get_version(encoder, paths[encoder])
+          client.connect()
+          client.socket.after_connect()
+        else:
+          logging.info("Unable to download binaries from target server")
+          exit(1)
+
+    else:
+      raise e
 
   import screen, curses
 
