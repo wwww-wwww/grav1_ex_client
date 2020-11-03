@@ -64,6 +64,7 @@ class Client:
     self.screen = None
 
     self.exit_event = Event()
+    self.exit_exc = None
 
   def stop(self):
     self.segment_store.dispose()
@@ -128,10 +129,19 @@ class Client:
     finally:
       self.push_job_state()
 
-  def connect(self):
+  def connect(self, fail_after=False):
     while True:
       try:
         self._connect()
+        try:
+          self._after_connect(fail_after)
+        except Exception as e:
+          if self.first_start:
+            raise e
+          else:
+            self.exit_exc = e
+            self.stop()
+
         return
       except TimeoutError as e:
         if self.first_start:
@@ -157,6 +167,32 @@ class Client:
     socket.connect()
 
     self.channel = None
+
+  def _after_connect(self, fail_after):
+    try:
+      self.socket.after_connect()
+    except phxsocket.channel.ChannelConnectError as e:
+      if fail_after:
+        raise e
+
+      if "reason" in e.args[0]:
+        if e.args[0]["reason"] in ["bad versions", "missing encoders"]:
+          encoders = e.args[0]["data"]
+          logging.error(e.args[0]["reason"], encoders)
+
+          if updater.update_encoders(self.target, self.ssl, encoders):
+            for encoder in encoders:
+              self.versions[encoder] = get_version(encoder, paths[encoder])
+            self.connect(fail_after=True)
+          else:
+            logging.info("Unable to download binaries from target server")
+            if self.first_start:
+              exit(1)
+            else:
+              raise Exception("Unable to update")
+
+      else:
+        raise e
 
   def reconnect(self):
     logging.log(log.Levels.NET, "reconnecting")
@@ -407,25 +443,8 @@ if __name__ == "__main__":
 
   client.connect()
 
-  try:
-    client.socket.after_connect()
-  except phxsocket.channel.ChannelConnectError as e:
-    if "reason" in e.args[0]:
-      if e.args[0]["reason"] in ["bad versions", "missing encoders"]:
-        encoders = e.args[0]["data"]
-        logging.error(e.args[0]["reason"], encoders)
-
-        if updater.update_encoders(client.target, client.ssl, encoders):
-          for encoder in encoders:
-            client.versions[encoder] = get_version(encoder, paths[encoder])
-          client.connect()
-          client.socket.after_connect()
-        else:
-          logging.info("Unable to download binaries from target server")
-          exit(1)
-
-    else:
-      raise e
+  if client.exit_exc:
+    raise client.exit_exc
 
   import screen, curses
 
@@ -437,4 +456,8 @@ if __name__ == "__main__":
 
   logging.info("ready")
 
-  scr.attach()
+  try:
+    scr.attach()
+  finally:
+    if client.exit_exc:
+      raise client.exit_exc
