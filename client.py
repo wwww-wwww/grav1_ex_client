@@ -127,6 +127,7 @@ class Client:
     except:
       logging.error(traceback.format_exc())
     finally:
+      self.refresh_screen("Workers")
       self.push_job_state()
 
   def connect(self, fail_after=False):
@@ -359,13 +360,13 @@ class Client:
       return None
 
   def after_work(self, resp, job):
-    self.refresh_screen("Workers")
     if resp:
       self.upload(job, resp)
     else:
       job.dispose()
 
   def after_work_remove(self, resp, job):
+    self.refresh_screen("Workers")
     self.push_job_state()
 
   def get_target_url(self):
