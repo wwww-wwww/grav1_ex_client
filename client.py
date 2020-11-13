@@ -241,6 +241,7 @@ class Client:
     self.channel = socket.channel("worker", params)
     self.channel.on("push_segment", self.on_job)
     self.channel.on("cancel", self.on_cancel)
+    self.channel.on("set_workers", self.on_set_workers)
 
     self.socket_id = self.channel.join()
 
@@ -294,6 +295,7 @@ class Client:
 
   def on_set_workers(self, payload):
     self.set_workers(payload["n"])
+    self.refresh_screen("Workers")
 
   def set_workers(self, n):
     self.workers.max_workers = n
