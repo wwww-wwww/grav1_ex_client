@@ -217,8 +217,10 @@ class Client:
     job_queue, workers = self.get_job_queue()
 
     params = {
-      "state": {
+      "meta": {
         "platform": sys.platform,
+      },
+      "state": {
         "workers": workers,
         "max_workers": self.workers.max_workers,
         "job_queue": job_queue,
@@ -231,7 +233,7 @@ class Client:
     }
 
     if self.name:
-      params["state"]["name"] = self.name
+      params["meta"]["name"] = self.name
 
     if self.socket_id:
       params["id"] = self.socket_id
