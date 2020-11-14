@@ -47,16 +47,16 @@ class Client:
 
     self.encode = {
       "aomenc":
-      lambda job: aom_vpx_encode("aom", threads, paths["ffmpeg"], paths[
-        "aomenc"], job),
+      lambda job: aom_vpx_encode("aom", threads, self.paths["ffmpeg"], self.
+                                 paths["aomenc"], job),
       "vpxenc":
-      lambda job: aom_vpx_encode("vpx", threads, paths["ffmpeg"], paths[
-        "vpxenc"], job)
+      lambda job: aom_vpx_encode("vpx", threads, self.paths["ffmpeg"], self.
+                                 paths["vpxenc"], job)
     }
 
     self.versions = {
-      "aomenc": get_version("aomenc", paths["aomenc"]),
-      "vpxenc": get_version("vpxenc", paths["vpxenc"])
+      "aomenc": get_version("aomenc", self.paths["aomenc"]),
+      "vpxenc": get_version("vpxenc", self.paths["vpxenc"])
     }
 
     self.alt_dl_server = alt_dl_server
@@ -182,7 +182,8 @@ class Client:
 
           if updater.update_encoders(self.get_target_url(), encoders):
             for enc in encoders:
-              self.versions[enc] = get_version(enc, "./{}".format(enc))
+              self.paths[enc] = "./{}".format(enc)
+              self.versions[enc] = get_version(enc, self.paths[enc])
 
             with self.workers.queue_lock:
               for job in self.workers.working:
