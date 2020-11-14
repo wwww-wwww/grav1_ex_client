@@ -32,6 +32,7 @@ pip install windows-curses
     | aomenc | path to aomenc |
     | vpxenc | path to vpxenc |
     | ffmpeg | path to ffmpeg |
+
     These can also be accessed with command line arguments. Check using `python3 client.py --help`
 2. Run!  
   `python3 client.py`
