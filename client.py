@@ -159,13 +159,12 @@ class Client:
     logging.log(log.Levels.NET, "connecting to websocket")
 
     socket_url = "ws{}://{}/websocket".format("s" if ssl else "", self.target)
-    socket = phxsocket.Client(socket_url, {"token": token})
-    self.socket = socket
+    self.socket = phxsocket.Client(socket_url, {"token": token})
 
-    socket.on_open = self.on_open
-    socket.on_error = self.on_error
-    socket.on_close = self.on_close
-    socket.connect()
+    self.socket.on_open = self.on_open
+    self.socket.on_error = self.on_error
+    self.socket.on_close = self.on_close
+    self.socket.connect()
 
     self.channel = None
 
@@ -183,13 +182,13 @@ class Client:
 
           if updater.update_encoders(self.get_target_url(), encoders):
             for enc in encoders:
-              self.versions[enc] = get_version(enc, self.paths[enc])
+              self.versions[enc] = get_version(enc, "./{}".format(enc))
 
             with self.workers.queue_lock:
               for job in self.workers.working:
                 job.args[0].dispose()
 
-            self.connect(fail_after=True)
+            self.reconnect(True)
           else:
             logging.info("Unable to download binaries from target server")
             if self.first_start:
@@ -200,12 +199,12 @@ class Client:
       else:
         raise e
 
-  def reconnect(self):
+  def reconnect(self, fail_after=False):
     logging.log(log.Levels.NET, "reconnecting")
     if self.socket:
       self.socket.close()
 
-    self.connect()
+    self.connect(fail_after)
 
   def on_error(self, socket, message):
     logging.log(log.Levels.NET, message)
@@ -411,7 +410,8 @@ class Client:
     }
 
     try:
-      self.channel.push("update", params)
+      if self.channel:
+        self.channel.push("update", params)
     except WebSocketConnectionClosedException:
       pass
     except:

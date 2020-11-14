@@ -1,4 +1,4 @@
-import logging, requests, sys, traceback
+import logging, os, requests, sys, traceback
 from urllib.parse import urljoin
 
 
@@ -9,6 +9,9 @@ class BinariesNotFoundError(Exception):
 def update_encoders(target, encoders):
   platform = sys.platform
   base_url = urljoin(target, "bin/{}/".format(sys.platform))
+
+  if platform == "linux":
+    import stat
 
   for encoder in encoders:
     if platform == "win32":
@@ -25,6 +28,10 @@ def update_encoders(target, encoders):
         with open(encoder, "wb+") as f:
           f.write(r.content)
           logging.info("Downloaded", encoder)
+
+        if platform == "linux":
+          os.chmod(encoder, stat.S_IRWXU | stat.S_IRGRP | stat.S_IROTH)
+
     except:
       logging.error(traceback.format_exc())
       return False
