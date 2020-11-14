@@ -19,7 +19,7 @@ pip install -r requirements.txt
 pip install windows-curses
 ```
 
-### Running
+## Running
 1. Copy `config.example.yaml` to `config.yaml` and modify fields:
     |  |  |
     | - | - | 
