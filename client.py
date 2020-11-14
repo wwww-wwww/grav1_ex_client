@@ -253,6 +253,7 @@ class Client:
     logging.log(log.Levels.NET, "connected to channel")
 
   def on_close(self, socket):
+    if self.first_start or not socket.websocket.sock: return
     self.reconnect()
 
   def on_job(self, payload):
