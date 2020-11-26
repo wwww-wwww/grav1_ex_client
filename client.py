@@ -182,7 +182,11 @@ class Client:
 
           if updater.update_encoders(self.get_target_url(), encoders):
             for enc in encoders:
-              self.paths[enc] = "./{}".format(enc)
+              if shutil.which("./{}".format(enc)):
+                self.paths[enc] = shutil.which("./{}".format(enc))
+              else:
+                self.paths[enc] = enc
+
               self.versions[enc] = get_version(enc, self.paths[enc])
 
             with self.workers.queue_lock:
