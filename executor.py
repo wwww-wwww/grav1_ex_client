@@ -177,10 +177,10 @@ class ThreadPoolExecutor(_base.Executor):
     try:
       yield front
     finally:
-      front.after_remove()
-      self.workers_release()
       self.working.remove(front)
       self._release(front.weight)
+      self.workers_release()
+      front.after_remove()
       del front
 
   def cancel(self, fn):
