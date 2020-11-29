@@ -96,6 +96,7 @@ class SegmentStore:
       self.downloading = None
 
     self.client.push_job_state()
+    self.client.refresh_screen("Workers")
 
   @property
   def segment(self):
