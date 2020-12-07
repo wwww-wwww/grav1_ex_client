@@ -39,6 +39,7 @@ class Client:
 
     self.socket = None
     self.socket_id = None
+    self.uuid = None
 
     self.hit = 0
     self.miss = 0
@@ -239,15 +240,20 @@ class Client:
     if self.name:
       params["meta"]["name"] = self.name
 
-    if self.socket_id:
+    if self.socket_id and self.uuid:
       params["id"] = self.socket_id
+      params["uuid"] = self.uuid
 
     self.channel = socket.channel("worker", params)
     self.channel.on("push_segment", self.on_job)
     self.channel.on("cancel", self.on_cancel)
     self.channel.on("set_workers", self.on_set_workers)
 
-    self.socket_id = self.channel.join()
+    resp = self.channel.join()
+    logging.info(resp)
+
+    self.socket_id = resp["sock_id"]
+    self.uuid = resp["uuid"]
 
     self.first_start = False
 
