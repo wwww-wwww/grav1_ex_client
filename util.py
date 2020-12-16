@@ -18,3 +18,11 @@ def urljoin(*args):
   url = _urljoin(str(args[0]) + "/", str(args[1]))
   if len(args) == 2: return url
   return urljoin(url, *args[2:])
+
+
+class JobStopped(Exception):
+  pass
+
+
+class EncodingError(Exception):
+  pass

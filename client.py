@@ -12,8 +12,7 @@ from websocket._exceptions import WebSocketConnectionClosedException
 from auth import auth_key, auth_pass, TimeoutError
 from segments import Job, SegmentStore
 
-from versions import get_version
-from encode import aom_vpx_encode
+from encode import get_encoders, get_versions
 
 import ratelimit, updater
 
@@ -45,20 +44,9 @@ class Client:
     self.miss = 0
 
     self.paths = paths
-
-    self.encode = {
-      "aomenc":
-      lambda job: aom_vpx_encode("aom", threads, self.paths["ffmpeg"], self.
-                                 paths["aomenc"], job),
-      "vpxenc":
-      lambda job: aom_vpx_encode("vpx", threads, self.paths["ffmpeg"], self.
-                                 paths["vpxenc"], job)
-    }
-
-    self.versions = {
-      "aomenc": get_version("aomenc", self.paths["aomenc"]),
-      "vpxenc": get_version("vpxenc", self.paths["vpxenc"])
-    }
+    self.encoders = get_encoders(paths)
+    self.encode = lambda job: self.encoders[job.encoder].encode(
+      job, self.paths, threads)
 
     self.alt_dl_server = alt_dl_server
 
@@ -93,7 +81,7 @@ class Client:
           "ffmpeg_params": job.ffmpeg_params,
           "passes": job.passes,
           "encoder": job.encoder,
-          "version": self.versions[job.encoder]
+          "version": self.encoders[job.encoder].version
         }
 
         params = {
@@ -188,7 +176,7 @@ class Client:
               else:
                 self.paths[enc] = enc
 
-              self.versions[enc] = get_version(enc, self.paths[enc])
+              self.encoders[enc].get_version(self.paths)
 
             with self.workers.queue_lock:
               for job in self.workers.working:
@@ -234,7 +222,7 @@ class Client:
         "uploading": uploading,
         "queue_size": self.queue_size
       },
-      "versions": self.versions
+      "versions": get_versions(self.encoders)
     }
 
     if self.name:
@@ -363,7 +351,7 @@ class Client:
 
       self.push_job_state()
       self.refresh_screen("Workers")
-      output = self.encode[job.encoder](job)
+      output = self.encode(job)
       if not job.pipe: return None
 
       return output
