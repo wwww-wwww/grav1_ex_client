@@ -53,6 +53,8 @@ def _worker(tpe):
         if work_item:
           result = work_item.run()
           work_item.after(result)
+        elif tpe._shutdown:
+          return
 
     except:
       logging.error(traceback.format_exc())
@@ -145,6 +147,9 @@ class ThreadPoolExecutor(_base.Executor):
   def get_job(self):
     with self._work_queue_not_empty:
       while len(self.work_queue) == 0:
+        if self._shutdown:
+          yield None
+          return
         self._work_queue_not_empty.wait()
 
     with self.queue_lock:
