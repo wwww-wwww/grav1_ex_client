@@ -153,7 +153,7 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
 class Aomenc(Encoder):
   def get_version(self, paths):
     path = paths["aomenc"]
-    if not shutil.which(path) and os.path.isfile(path):
+    if not shutil.which(path):
       return None
     p = subprocess.run([path, "--help"], stdout=subprocess.PIPE)
     r = re.search(r"av1.+?\s+([0-9][^\s]+)", p.stdout.decode("utf-8"))
@@ -167,7 +167,7 @@ class Aomenc(Encoder):
 class Vpxenc(Encoder):
   def get_version(self, paths):
     path = paths["vpxenc"]
-    if not shutil.which(path) and os.path.isfile(path):
+    if not shutil.which(path):
       return None
     p = subprocess.run([path, "--help"], stdout=subprocess.PIPE)
     r = re.search(r"vp9.+?\s+(v[^\s]+)", p.stdout.decode("utf-8"))

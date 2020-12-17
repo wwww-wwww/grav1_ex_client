@@ -8,6 +8,6 @@ queue: 3
 
 threads: 8
 
-aomenc: aomenc
-vpxenc: vpxenc
+aomenc: ./aomenc
+vpxenc: ./vpxenc
 ffmpeg: ffmpeg

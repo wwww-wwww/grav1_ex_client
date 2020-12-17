@@ -440,7 +440,7 @@ if __name__ == "__main__":
   }
 
   for path in paths:
-    if paths[path] == path and path != "ffmpeg":
+    if paths[path] in [path, f"./{path}"] and path != "ffmpeg":
       continue
     elif not shutil.which(paths[path]):
       logging.error(path, "not found at", paths[path])
