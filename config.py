@@ -1,5 +1,11 @@
-import os, yaml
+import os
 from argparse import ArgumentParser
+from yaml import load
+
+try:
+  from yaml import CLoader as Loader
+except ImportError:
+  from yaml import Loader
 
 
 class Args(dict):
@@ -69,7 +75,7 @@ def load_config():
   args.parse()
 
   if os.path.isfile(args.config):
-    args.update(yaml.load(open(args.config), Loader=yaml.CLoader))
+    args.update(load(open(args.config), Loader=Loader))
   else:
     args.update({})
 
