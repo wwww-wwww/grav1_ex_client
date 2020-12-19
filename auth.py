@@ -1,5 +1,5 @@
 import logging, traceback
-from requests import Session, ConnectTimeout
+from requests import Session, RequestException
 from requests.exceptions import SSLError
 from urllib.parse import urljoin
 from logger import Levels
@@ -32,7 +32,7 @@ def auth(target, payload, ssl=True):
     r = session.post(auth_url, json=payload, timeout=5)
   except SSLError:
     return auth(target, payload, False)
-  except ConnectTimeout:
+  except RequestException:
     raise TimeoutError()
 
   try:
