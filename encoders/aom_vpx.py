@@ -157,7 +157,7 @@ class Aomenc(Encoder):
       return None
     p = subprocess.run([path, "--help"], stdout=subprocess.PIPE)
     r = re.search(r"av1.+?\s+([0-9][^\s]+)", p.stdout.decode("utf-8"))
-    self.version = r.group(1).strip()
+    self.version = r.group(1).strip() if r else None
     return self.version
 
   def encode(self, job, paths, threads):
@@ -171,7 +171,7 @@ class Vpxenc(Encoder):
       return None
     p = subprocess.run([path, "--help"], stdout=subprocess.PIPE)
     r = re.search(r"vp9.+?\s+(v[^\s]+)", p.stdout.decode("utf-8"))
-    self.version = r.group(1).strip()
+    self.version = r.group(1).strip() if r else None
     return self.version
 
   def encode(self, job, paths, threads):
