@@ -122,76 +122,74 @@ class Client:
   def connect(self, fail_after=False):
     while True:
       try:
-        self._connect()
-        try:
-          self._after_connect(fail_after)
-        except Exception as e:
-          if self.first_start:
-            raise e
-          else:
-            self.exit_exc = e
-            self.stop()
+        connection = self._connect()
+      except phxsocket.channel.ChannelConnectError as e:
+        if fail_after:
+          raise e
 
-        return
+        if "reason" not in e.args[0]:
+          raise e
+
+        if e.args[0]["reason"] not in ["bad versions", "missing encoders"]:
+          raise e
+
+        encoders = e.args[0]["data"]
+        logging.error(e.args[0]["reason"], encoders)
+
+        if updater.update_encoders(self.get_target_url(), encoders):
+          for enc in encoders:
+            if shutil.which("./{}".format(enc)):
+              self.paths[enc] = shutil.which("./{}".format(enc))
+            else:
+              self.paths[enc] = enc
+
+            self.encoders[enc].get_version(self.paths)
+
+          with self.workers.queue_lock:
+            for job in self.workers.working:
+              job.args[0].dispose()
+
+          self.reconnect(True)
+        else:
+          logging.info("Unable to download binaries from target server")
+          raise Exception("Unable to update")
+
       except TimeoutError as e:
         if self.first_start:
           raise e
         logging.log(log.Levels.NET, "timed out, trying again.")
+      except Exception as e:
+        if self.first_start:
+          raise e
+        else:
+          self.exit_exc = e
+          self.stop()
+
+      return
 
   def _connect(self):
     ssl, token = auth_key(self.target, self.key)
 
+    self.ssl = ssl
     if ssl:
-      self.ssl = True
       logging.log(log.Levels.NET, "using ssl")
 
     logging.log(log.Levels.NET, "connecting to websocket")
 
     socket_url = "ws{}://{}/websocket".format("s" if ssl else "", self.target)
-    self.socket = phxsocket.Client(socket_url, {"token": token})
+    if self.socket:
+      self.socket.set_params({"token": token}, url=socket_url)
+    else:
+      self.socket = phxsocket.Client(socket_url, {"token": token})
 
-    self.socket.on_open = self.on_open
-    self.socket.on_error = self.on_error
-    self.socket.on_close = self.on_close
-    self.socket.connect()
+      self.socket.on_open = self.on_open
+      self.socket.on_error = self.on_error
+      self.socket.on_close = self.on_close
+      self.socket.on_message = lambda msg: logging.info(msg)
 
     self.channel = None
 
-  def _after_connect(self, fail_after):
-    try:
-      self.socket.after_connect()
-    except phxsocket.channel.ChannelConnectError as e:
-      if fail_after:
-        raise e
-
-      if "reason" in e.args[0]:
-        if e.args[0]["reason"] in ["bad versions", "missing encoders"]:
-          encoders = e.args[0]["data"]
-          logging.error(e.args[0]["reason"], encoders)
-
-          if updater.update_encoders(self.get_target_url(), encoders):
-            for enc in encoders:
-              if shutil.which("./{}".format(enc)):
-                self.paths[enc] = shutil.which("./{}".format(enc))
-              else:
-                self.paths[enc] = enc
-
-              self.encoders[enc].get_version(self.paths)
-
-            with self.workers.queue_lock:
-              for job in self.workers.working:
-                job.args[0].dispose()
-
-            self.reconnect(True)
-          else:
-            logging.info("Unable to download binaries from target server")
-            if self.first_start:
-              exit(1)
-            else:
-              raise Exception("Unable to update")
-
-      else:
-        raise e
+    self.socket.connect()
 
   def reconnect(self, fail_after=False):
     logging.log(log.Levels.NET, "reconnecting")
@@ -251,7 +249,7 @@ class Client:
     logging.log(log.Levels.NET, "connected to channel")
 
   def on_close(self, socket):
-    if self.first_start or not socket.websocket.sock: return
+    if self.first_start: return
     self.reconnect()
 
   def on_job(self, payload):
