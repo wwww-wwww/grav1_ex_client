@@ -32,6 +32,8 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
     "-1",
     "-pix_fmt",
     "yuv420p10le",
+    "-vsync",
+    "0",
     "-vf",
     vf,
     "-vframes",
