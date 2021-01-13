@@ -1,4 +1,4 @@
-import json, logging, os, sys, shutil, traceback, phxsocket
+import json, logging, os, sys, shutil, traceback, phxsocket, time
 from requests import Session
 import logger as log
 
@@ -8,7 +8,6 @@ from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
-from websocket._exceptions import WebSocketConnectionClosedException
 from auth import auth_key, auth_pass, TimeoutError
 from segments import Job, SegmentStore
 
@@ -39,6 +38,8 @@ class Client:
     self.socket = None
     self.socket_id = None
     self.uuid = None
+
+    self.socket_open = Event()
 
     self.hit = 0
     self.miss = 0
@@ -122,7 +123,7 @@ class Client:
   def connect(self, fail_after=False):
     while True:
       try:
-        connection = self._connect()
+        return self._connect()
       except phxsocket.channel.ChannelConnectError as e:
         if fail_after:
           raise e
@@ -149,7 +150,7 @@ class Client:
             for job in self.workers.working:
               job.args[0].dispose()
 
-          self.reconnect(True)
+          return self.reconnect(True)
         else:
           logging.info("Unable to download binaries from target server")
           raise Exception("Unable to update")
@@ -189,14 +190,16 @@ class Client:
 
     self.channel = None
 
-    self.socket.connect()
+    return self.socket.connect()
 
   def reconnect(self, fail_after=False):
     logging.log(log.Levels.NET, "reconnecting")
-    if self.socket:
+    try:
       self.socket.close()
+    except phxsocket.client.SocketClosedError:
+      pass
 
-    self.connect(fail_after)
+    return self.connect(fail_after)
 
   def on_error(self, socket, message):
     logging.log(log.Levels.NET, message)
@@ -247,10 +250,15 @@ class Client:
     self.progress_channel.join()
 
     logging.log(log.Levels.NET, "connected to channel")
+    self.socket_open.set()
 
   def on_close(self, socket):
     if self.first_start: return
-    self.reconnect()
+    logging.log(log.Levels.NET, "closed")
+    self.socket_open.clear()
+    while not self.reconnect():
+      logging.log(log.Levels.NET, "Failed to reconnect, retrying in 5 seconds")
+      time.sleep(5)
 
   def on_job(self, payload):
     with self.state_lock:
@@ -264,7 +272,13 @@ class Client:
         return
 
       logging.log(log.Levels.NET, "received job", str(payload))
-      self.channel.push("recv_segment", {"downloading": segment_id})
+      while True:
+        try:
+          self.channel.push("recv_segment", {"downloading": segment_id})
+          break
+        except phxsocket.client.SocketClosedError:
+          self.socket_open.wait()
+
       self.download(payload["url"], Job(self, payload))
       self._push_job_state()
 
@@ -385,7 +399,7 @@ class Client:
       try:
         self.progress_channel.push("update_workers",
                                    {"workers": self.get_workers()})
-      except WebSocketConnectionClosedException:
+      except phxsocket.client.SocketClosedError:
         pass
       except:
         logging.error(traceback.format_exc())
@@ -410,7 +424,7 @@ class Client:
     try:
       if self.channel:
         self.channel.push("update", params)
-    except WebSocketConnectionClosedException:
+    except SocketClosedError:
       pass
     except:
       logging.error(traceback.format_exc())
