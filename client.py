@@ -333,6 +333,9 @@ class Client:
       weight += job.weight
       workers.append(worker)
 
+    if weight % 1 == 0:
+      weight = int(weight)
+
     return workers, weight
 
   def get_job_queue(self):

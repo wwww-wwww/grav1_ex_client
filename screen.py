@@ -71,8 +71,10 @@ class WorkerTab(Tab):
     else:
       downloading = ""
 
+    weight = self.client.workers._value
+
     return "Capacity: {}/{} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {}{}".format(
-      self.client.workers._value,
+      int(weight) if weight % 1 == 0 else weight,
       self.client.workers.max_workers,
       active_workers,
       len(self.client.workers.work_queue),
