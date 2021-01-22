@@ -17,21 +17,16 @@ import ratelimit, updater
 
 
 class Client:
-  def __init__(self, target, key, name, max_workers, queue_size, threads,
-               paths, alt_dl_server):
-    self.target = target
+  def __init__(self, config, paths):
+    self.config = config
     self.ssl = False
     self.first_start = True
-
-    self.key = key
-    self.name = name
 
     self.session = Session()
     self.upload_queue = ThreadPoolExecutor(1)
 
-    self.queue_size = queue_size
     self.segment_store = SegmentStore(self)
-    self.workers = ThreadPoolExecutor(max_workers)
+    self.workers = ThreadPoolExecutor(config.workers)
 
     self.state_lock = Lock()
 
@@ -47,9 +42,7 @@ class Client:
     self.paths = paths
     self.encoders = get_encoders(paths)
     self.encode = lambda job: self.encoders[job.encoder].encode(
-      job, self.paths, threads)
-
-    self.alt_dl_server = alt_dl_server
+      job, self.paths, config.threads)
 
     self.screen = None
 
@@ -87,7 +80,7 @@ class Client:
 
         params = {
           "segment": job.segment,
-          "key": self.key,
+          "key": self.config.key,
           "socket_id": self.socket_id,
           "encode_settings": json.dumps(encode_settings)
         }
@@ -169,7 +162,7 @@ class Client:
       return
 
   def _connect(self):
-    ssl, token = auth_key(self.target, self.key)
+    ssl, token = auth_key(self.config.target, self.config.key)
 
     self.ssl = ssl
     if ssl:
@@ -177,7 +170,8 @@ class Client:
 
     logging.log(log.Levels.NET, "connecting to websocket")
 
-    socket_url = "ws{}://{}/websocket".format("s" if ssl else "", self.target)
+    socket_url = "ws{}://{}/websocket".format("s" if ssl else "",
+                                              self.config.target)
     if self.socket:
       self.socket.set_params({"token": token}, url=socket_url)
     else:
@@ -208,7 +202,7 @@ class Client:
     logging.log(log.Levels.NET, "websocket opened")
 
     upload_queue, uploading = self.get_upload_queue()
-    job_queue, workers = self.get_job_queue()
+    job_queue, workers, weight = self.get_job_queue()
 
     params = {
       "meta": {
@@ -221,13 +215,14 @@ class Client:
         "upload_queue": upload_queue,
         "downloading": self.segment_store.segment,
         "uploading": uploading,
-        "queue_size": self.queue_size
+        "queue_size": self.config.queue,
+        "weighted_workers": weight
       },
       "versions": get_versions(self.encoders)
     }
 
-    if self.name:
-      params["meta"]["name"] = self.name
+    if self.config.name:
+      params["meta"]["name"] = self.config.name
 
     if self.socket_id and self.uuid:
       params["id"] = self.socket_id
@@ -263,7 +258,7 @@ class Client:
   def on_job(self, payload):
     with self.state_lock:
       segment_id = payload["segment_id"]
-      job_queue, workers = self.get_job_queue()
+      job_queue, workers, _weight = self.get_job_queue()
 
       if segment_id in job_queue or \
         self.segment_store.downloading or \
@@ -321,10 +316,11 @@ class Client:
 
   def get_workers(self):
     with self.workers.queue_lock:
-      return self._get_workers(self.workers.working)
+      return self._get_workers(self.workers.working)[0]
 
   def _get_workers(self, working):
     workers = []
+    weight = 0
     for work_item in self.workers.working:
       job = work_item.args[0]
       worker = {
@@ -334,17 +330,19 @@ class Client:
         "progress_den": job.frames,
         "pass": job.progress[0]
       }
+      weight += job.weight
       workers.append(worker)
-    return workers
+
+    return workers, weight
 
   def get_job_queue(self):
     with self.workers.queue_lock:
       worker_queue = [
         job.args[0].segment for job in list(self.workers.work_queue)
       ]
-      working = self._get_workers(self.workers.working)
+      working, weight = self._get_workers(self.workers.working)
 
-      return worker_queue, working
+      return worker_queue, working, weight
 
   def get_upload_queue(self):
     with self.upload_queue.queue_lock:
@@ -385,7 +383,7 @@ class Client:
     self.push_job_state()
 
   def get_target_url(self):
-    return "http{}://{}".format("s" if self.ssl else "", self.target)
+    return "http{}://{}".format("s" if self.ssl else "", self.config.target)
 
   def download(self, url, job):
     url = urljoin(self.get_target_url(), url)
@@ -410,7 +408,7 @@ class Client:
 
   def _push_job_state(self):
     upload_queue, uploading = self.get_upload_queue()
-    job_queue, workers = self.get_job_queue()
+    job_queue, workers, weight = self.get_job_queue()
 
     params = {
       "workers": workers,
@@ -418,13 +416,14 @@ class Client:
       "job_queue": job_queue,
       "upload_queue": upload_queue,
       "downloading": self.segment_store.segment,
-      "uploading": uploading
+      "uploading": uploading,
+      "weighted_workers": weight
     }
 
     try:
       if self.channel:
         self.channel.push("update", params)
-    except SocketClosedError:
+    except phxsocket.client.SocketClosedError:
       pass
     except:
       logging.error(traceback.format_exc())
@@ -458,16 +457,7 @@ if __name__ == "__main__":
       logging.error(path, "not found at", paths[path])
       exit(1)
 
-  client = Client(
-    config.target,
-    config.key,
-    config.name,
-    config.workers,
-    config.queue,
-    config.threads,
-    paths,
-    config.alt_dl_server,
-  )
+  client = Client(config, paths)
 
   client.connect()
 

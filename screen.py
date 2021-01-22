@@ -2,7 +2,10 @@ import curses, textwrap, logging, traceback
 from threading import Event, Lock, Thread
 
 KEY_TAB = ord("\t")
+KEY_1 = ord("1")
+KEY_2 = ord("2")
 KEY_R = ord("R")
+KEY_q = ord("q")
 
 menu_items = ["add", "remove", "kill"]
 
@@ -63,17 +66,22 @@ class WorkerTab(Tab):
     active_workers = len(self.client.workers.working)
 
     if self.client.segment_store.downloading:
-      downloading = "Downloading: {:.2f}%".format(
+      downloading = " Downloading: {:.2f}%".format(
         self.client.segment_store.download_progress * 100)
     else:
       downloading = ""
 
-    return "Workers: {} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {} {}".format(
-      self.client.workers.max_workers, active_workers,
+    return "Capacity: {}/{} Active: {} Queue: {} Uploading: {} Hit: {} Miss: {}{}".format(
+      self.client.workers._value,
+      self.client.workers.max_workers,
+      active_workers,
       len(self.client.workers.work_queue),
       len(self.client.upload_queue.work_queue) +
-      len(self.client.upload_queue.working), self.client.hit, self.client.miss,
-      downloading)
+      len(self.client.upload_queue.working),
+      self.client.hit,
+      self.client.miss,
+      downloading,
+    )
 
   def footer(self, cols):
     footer = [("[{}]" if i == self.menu_selection else " {} ").format(item)
@@ -158,8 +166,8 @@ class Screen:
           footer = [line for line in textwrap.wrap(footer_text, width=mcols)]
 
           footer2 = " ".join(
-            ["F{} {} ".format(i, t.name) for i, t in enumerate(self.tabs, 1)])
-          footer2_right = "F12 Quit"
+            ["[{}] {} ".format(i, t.name) for i, t in enumerate(self.tabs, 1)])
+          footer2_right = "[Q]uit"
           footer2 = "{}{}{}".format(
             footer2, ' ' * max(mcols - len(footer2 + footer2_right), 1),
             footer2_right)
@@ -198,18 +206,18 @@ class Screen:
 
       if self.tab >= len(self.tabs) or len(self.tabs) == 0: continue
 
-      if c == curses.KEY_F12 or c == ord("q"):
+      if c == curses.KEY_F12 or c == KEY_q:
         self.client.stop()
         return
 
-      if c == curses.KEY_F1:
+      if c == KEY_1:
         self.tab = 0
         with self.render_lock:
           self.scr.clear()
           self.refresh_screen()
         continue
 
-      if c == curses.KEY_F2:
+      if c == KEY_2:
         self.tab = 1
         with self.render_lock:
           self.scr.clear()

@@ -11,3 +11,16 @@ threads: 8
 aomenc: ./aomenc
 vpxenc: ./vpxenc
 ffmpeg: ffmpeg
+
+weights:
+  aomenc:
+    cpu0: 2
+    cpu1: 2
+    cpu2: 1
+    cpu3: 1
+    cpu4: 1
+    cpu5: 1
+    cpu6: 1
+    cpu7: 1
+    cpu8: 1
+    cpu9: 1
