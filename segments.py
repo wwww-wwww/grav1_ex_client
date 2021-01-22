@@ -1,4 +1,4 @@
-import os, logging, json, traceback
+import os, logging, json, traceback, re
 from util import synchronized, urljoin
 import logger as log
 
@@ -49,11 +49,11 @@ class SegmentStore:
           file.write(chunk)
 
   def download_alt(self, url, job):
-    if self.client.alt_dl_server is None:
+    if not self.client.config.alt_dl_server:
       return False
 
     ext_url = urljoin(
-      self.client.alt_dl_server,
+      self.client.config.alt_dl_server,
       job.project,
       "split",
       job.file,
@@ -83,7 +83,7 @@ class SegmentStore:
         self.client.workers.submit(
           self.client.work,
           [job],
-          weight=1,
+          weight=job.weight,
           after=self.client.after_work,
           after_remove=self.client.after_work_remove,
         )
@@ -111,7 +111,7 @@ class SegmentStore:
       self.client.workers.submit(
         self.client.work,
         [job],
-        weight=1,
+        weight=job.weight,
         after=self.client.after_work,
         after_remove=self.client.after_work_remove,
       )
@@ -156,6 +156,24 @@ class Job:
 
     self.stopped = False
     self.disposed = False
+
+    self.weight = self._get_weight()
+
+  def _get_weight(self):
+    if self.encoder not in self.client.config.weights:
+      return 1
+
+    if self.encoder in ["aomenc", "vpxenc"]:
+      for param in self.encoder_params:
+        match = re.match("--cpu-used=(.+)", param)
+        if match:
+          cpu_used = f"cpu{match.group(1)}"
+          if cpu_used in self.client.config.weights[self.encoder]:
+            return self.client.config.weights[self.encoder][cpu_used]
+
+          break
+
+    return 1
 
   def dispose(self):
     self.stopped = True
