@@ -7,7 +7,7 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
   encoder_params = job.encoder_params
   ffmpeg_params = job.ffmpeg_params
 
-  vfs = ["select=gte(n\\,{})".format(job.start)]
+  vfs = [f"select=gte(n\\,{job.start})"]
 
   if "-vf" in ffmpeg_params:
     idx = ffmpeg_params.index("-vf")
@@ -18,8 +18,8 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
 
   vf = ",".join(vfs)
 
-  output_filename = "tmp{}.ivf".format(job.segment)
-  log_path = "tmp{}.log".format(job.segment)
+  output_filename = f"tmp{job.segment}.ivf"
+  log_path = f"tmp{job.segment}.log"
 
   ffmpeg = [
     ffmpeg_path,
@@ -49,20 +49,20 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
     encoder_path,
     "-",
     "--ivf",
-    "--fpf={}".format(log_path),
-    "--threads={}".format(threads),
-    "--passes={}".format(job.passes),
+    f"--fpf={log_path}",
+    f"--threads={threads}",
+    f"--passes={job.passes}",
+    "-o",
+    output_filename,
   ] + encoder_params
 
   aom = [str(s) for s in aom]
 
   if job.passes == 2:
     passes = [
-      aom + ["--pass=1", "-o", os.devnull],
-      aom + ["--pass=2", "-o", output_filename]
+      aom + ["--pass=1"],
+      aom + ["--pass=2"],
     ]
-  else:
-    passes = aom + ["-o", output_filename]
 
   # if job.grain_table:
   #  if not job.has_grain:
@@ -79,7 +79,7 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
       ffmpeg_pipe = subprocess.Popen(
         ffmpeg,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
       )
 
       job.pipe = subprocess.Popen(
