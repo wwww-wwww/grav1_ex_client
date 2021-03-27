@@ -8,7 +8,7 @@ from threading import Event, Lock
 from collections import deque
 from executor import ThreadPoolExecutor
 
-from auth import auth_key, auth_pass, TimeoutError
+from auth import auth_key, TimeoutError
 from segments import Job, SegmentStore
 
 from encode import get_encoders, get_versions
@@ -467,7 +467,7 @@ if __name__ == "__main__":
   if client.exit_exc:
     raise client.exit_exc
 
-  import screen, curses
+  import screen
 
   scr = screen.Screen(client)
   scr.add_tab(screen.WorkerTab(scr, client))
