@@ -1,4 +1,4 @@
-import json, logging, os, sys, shutil, traceback, phxsocket, time
+import json, logging, os, sys, shutil, traceback, phxsocket, time, platform
 from requests import Session
 import logger as log
 
@@ -221,7 +221,9 @@ class Client:
       "versions": get_versions(self.encoders)
     }
 
-    if self.config.name:
+    if self.config.hostname:
+      params["meta"]["name"] = platform.node()
+    elif self.config.name:
       params["meta"]["name"] = self.config.name
 
     if self.socket_id and self.uuid:
