@@ -467,6 +467,17 @@ if __name__ == "__main__":
   if client.exit_exc:
     raise client.exit_exc
 
+  if config.headless:
+    try:
+      if os.name == "nt":
+        while True: time.sleep(1)
+      else:
+        Event().wait()
+    finally:
+      if client.exit_exc:
+        raise client.exit_exc
+      exit()
+
   import screen
 
   scr = screen.Screen(client)

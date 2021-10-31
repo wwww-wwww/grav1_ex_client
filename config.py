@@ -71,6 +71,7 @@ def load_config():
                     help="Path to ffmpeg (default: ffmpeg)")
   args.add_argument("--alt-dl-server",
                     help="Location to external download server")
+  args.add_argument("--headless", help="Launch without UI", action="store_true")
 
   args.parse()
 
