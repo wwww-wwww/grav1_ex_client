@@ -306,6 +306,7 @@ class Client:
     self.refresh_screen("Workers")
 
   def set_workers(self, n):
+    if self.workers.max_workers == n: return
     self.workers.max_workers = n
     self.workers._adjust_thread_count()
     self.push_job_state()
