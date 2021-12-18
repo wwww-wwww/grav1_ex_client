@@ -59,8 +59,9 @@ def encode(encoder, threads, ffmpeg_path, encoder_path, job):
   aom = [str(s) for s in aom]
 
   if job.passes == 2:
+    pass1 = [a for a in aom if not a.startswith("--denoise-noise-level")]
     passes = [
-      aom + ["--pass=1"],
+      pass1 + ["--pass=1"],
       aom + ["--pass=2"],
     ]
 

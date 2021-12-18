@@ -473,7 +473,8 @@ if __name__ == "__main__":
   if config.headless:
     try:
       if os.name == "nt":
-        while True: time.sleep(1)
+        while True:
+          time.sleep(1)
       else:
         Event().wait()
     finally:
